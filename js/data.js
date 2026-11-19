@@ -18,7 +18,8 @@ const mockData = {
         directorName: "Dr. Layla Haddad",
         directorEmail: "l.haddad@communityhealthngo.org",
         directorMobile: "+961 70 111 222",
-        sectors: "Mental Health, Substance Use, Community Awareness",
+        participatesInAors: true,
+        aors: ["MHPSS Coordination Group (MHPSS CG)", "Health", "Education"],
         website: "https://www.communityhealthngo.org",
         linkedin: "https://www.linkedin.com/company/community-health-ngo",
         daleelMadani: "https://daleel-madani.org/profile/community-health-ngo"
@@ -86,6 +87,7 @@ const mockData = {
     surveys: [
         { id: 1, name: "Prevention Activities Annual Survey", type: "Prevention", description: "Prevention programmes delivered in schools, communities, and workplaces.", year: "2025", status: "Draft", updated: "12 Feb 2025" },
         { id: 2, name: "Treatment Services Annual Survey", type: "Treatment", description: "Outpatient and residential treatment services and capacity.", year: "2025", status: "Draft", updated: "05 Feb 2025" },
+        { id: 7, name: "Harm Reduction Services Survey", type: "Harm Reduction", description: "Needle and syringe programmes, overdose prevention, and outreach.", year: "2025", status: "Submitted", updated: "28 Jan 2025" },
         { id: 3, name: "Harm Reduction Services Survey", type: "Harm Reduction", description: "Needle and syringe programmes, overdose prevention, and outreach.", year: "2024", status: "Submitted", updated: "18 Nov 2024" },
         { id: 4, name: "Prevention Activities Annual Survey", type: "Prevention", description: "Prevention programmes delivered in schools, communities, and workplaces.", year: "2024", status: "Submitted", updated: "22 Oct 2024" },
         { id: 5, name: "Treatment Services Annual Survey", type: "Treatment", description: "Outpatient and residential treatment services and capacity.", year: "2024", status: "Submitted", updated: "09 Oct 2024" },
@@ -295,6 +297,18 @@ const mockData = {
             fullContent: "Scheduled maintenance will occur on Friday, 10 PM - 11 PM local time. During this period, the system will be temporarily unavailable. We apologize for any inconvenience.",
             timestamp: "5 days ago",
             unread: false
+        },
+        {
+            id: 5,
+            audience: "ngo",
+            type: "system",
+            title: "What\u2019s New: Improved Notifications",
+            preview: "Notifications now group by type and support quick actions directly from the bell menu.",
+            fullContent: "Notifications now group by type and support quick actions directly from the bell menu.",
+            timestamp: "1 week ago",
+            unread: false,
+            action: "View What\u2019s New",
+            resourceTopic: "whats-new"
         }
     ],
     needsAttention: [
@@ -320,7 +334,7 @@ const mockData = {
         },
         {
             title: "Welcome to MHIS",
-            content: "Thank you for joining the Mental Health Information System. Your organization profile is currently under review.",
+            content: "Thank you for joining the Mental Health Information System.",
             date: "March 1, 2024"
         }
     ],
@@ -346,9 +360,52 @@ const mockData = {
     ]
 };
 
+// Profile of the "Existing NGO (4Ws only)" demo account. Its facilities,
+// providers and activities reuse the same sample data as the Existing NGO.
+mockData.fourWsOnlyProfile = {
+    name: "Northern Relief Association",
+    acronym: "NRA",
+    phone: "+961 6 222 333",
+    mobile: "+961 71 222 333",
+    email: "info@northernrelief.org",
+    directorName: "Joseph Karam",
+    directorEmail: "j.karam@northernrelief.org",
+    directorMobile: "+961 70 222 333",
+    participatesInAors: true,
+    aors: ["MHPSS Coordination Group (MHPSS CG)", "Livelihoods"],
+    website: "https://www.northernrelief.org",
+    linkedin: "",
+    daleelMadani: ""
+};
+
+// Sectors / areas of responsibility (AORs) an organization can take part
+// in, as listed in the Organization Details of the current MHIS.
+mockData.aorSectors = [
+    "MHPSS Coordination Group (MHPSS CG)", "Child Protection", "Gender-Based Violence (GBV)",
+    "Community Protection", "Cash Working Group", "Logistics", "Basic Assistance", "Education",
+    "Energy", "Food Security & Agriculture", "Health", "Sexual & Reproductive Health (SRH)",
+    "Nutrition", "Livelihoods", "Shelter", "Site Management and Coordination", "Social Stability",
+    "Water, Sanitation and Hygiene (WaSH)"
+];
+
+// The organization profile of the signed-in (already approved) NGO.
+function getCurrentNgoProfile() {
+    const account = getCurrentAccount();
+    return account && account.id === 'ngo-4ws-only' ? mockData.fourWsOnlyProfile : mockData.organizationProfile;
+}
+
+// The signed-in organization's name, for an NGO that registered in the demo
+// as well as for the two existing NGOs.
+function getCurrentOrganizationName() {
+    const registration = getCurrentRegistration();
+    return registration ? registration.organization : getCurrentNgoProfile().name;
+}
+
 // Application State
 let appState = {
     currentPage: 'home',
+    // The area an approved NGO is working in: 'mhis', '4ws' or 'su' (nav.js).
+    currentArea: 'mhis',
     notifications: mockData.notifications,
     unreadCount: mockData.notifications.filter(n => n.unread).length,
     profileDirty: false
@@ -356,8 +413,8 @@ let appState = {
 
 // ===== Events Calendar mock data =====
 mockData.calendarEventTypes = [
-    { id: 'event', label: 'Event', color: '#1e7e34' },
-    { id: 'training', label: 'Training', color: '#1565c0' },
+    { id: 'event', label: 'Event', color: '#097d63' },
+    { id: 'training', label: 'Training', color: '#1a5fb4' },
     { id: 'awareness', label: 'Awareness Campaign', color: '#6a4c93' }
 ];
 
@@ -371,23 +428,25 @@ mockData.calendarEventTypes = [
         return iso(d);
     };
     mockData.calendarEvents = [
-        { id: 1, title: 'Regional Mental Health Summit', type: 'event', status: 'confirmed', date: withOffset(2), startTime: '10:00', endTime: '16:00', location: 'Beirut Conference Center', description: 'Annual summit bringing together mental health practitioners across the region.' },
-        { id: 2, title: 'Data Quality Training', type: 'training', status: 'confirmed', date: withOffset(5), startTime: '14:00', endTime: '17:00', location: 'Central Health Clinic', description: 'Hands-on training for facility staff on the 4Ws data collection tools.' },
-        { id: 3, title: 'Community Awareness Campaign Kickoff', type: 'awareness', status: 'pending', date: withOffset(1), startTime: '09:00', endTime: '12:00', location: 'Northern Community Center', description: 'Launch event for the stigma-reduction awareness campaign.' },
-        { id: 4, title: 'Provider Onboarding Session', type: 'training', status: 'pending', date: withOffset(9), startTime: '11:00', endTime: '13:00', location: 'Bekaa Mental Health Hospital', description: '' },
-        { id: 5, title: 'Partners Networking Evening', type: 'event', status: 'confirmed', date: withOffset(12), startTime: '18:00', endTime: '20:00', location: 'Southern Wellbeing Center', description: '' },
-        { id: 6, title: 'Youth Awareness Workshop', type: 'awareness', status: 'confirmed', date: withOffset(-3), startTime: '10:00', endTime: '12:30', location: 'Mount Lebanon Mobile Unit', description: '' },
-        { id: 7, title: 'Cancelled Field Visit', type: 'event', status: 'canceled', date: withOffset(-1), startTime: '09:00', endTime: '11:00', location: 'Central Health Clinic', description: 'Cancelled due to weather conditions.' },
-        { id: 8, title: 'Psychological First Aid Training', type: 'training', status: 'confirmed', date: withOffset(16), startTime: '09:00', endTime: '15:00', location: 'Central Health Clinic', description: '' },
-        { id: 9, title: 'Mental Health Awareness Radio Spot Recording', type: 'awareness', status: 'canceled', date: withOffset(6), startTime: '13:00', endTime: '14:00', location: '', description: '' },
-        { id: 10, title: 'Monthly Coordination Meeting', type: 'event', status: 'confirmed', date: withOffset(0), startTime: '15:00', endTime: '16:00', location: 'Online', description: '' }
+        { id: 1, organization: 'NMHP', title: 'Regional Mental Health Summit', type: 'event', status: 'confirmed', date: withOffset(2), startTime: '10:00', endTime: '16:00', location: 'Beirut Conference Center', description: 'Annual summit bringing together mental health practitioners across the region.' },
+        { id: 2, organization: 'NMHP', title: 'Data Quality Training', type: 'training', status: 'confirmed', date: withOffset(5), startTime: '14:00', endTime: '17:00', location: 'Central Health Clinic', description: 'Hands-on training for facility staff on the 4Ws data collection tools.' },
+        { id: 3, organization: 'Community Health NGO', title: 'Community Awareness Campaign Kickoff', type: 'awareness', status: 'pending', date: withOffset(1), startTime: '09:00', endTime: '12:00', location: 'Northern Community Center', description: 'Launch event for the stigma-reduction awareness campaign.' },
+        { id: 4, organization: 'Bekaa Wellbeing Initiative', title: 'Provider Onboarding Session', type: 'training', status: 'pending', date: withOffset(9), startTime: '11:00', endTime: '13:00', location: 'Bekaa Mental Health Hospital', description: '' },
+        { id: 5, organization: 'Southern Care Network', title: 'Partners Networking Evening', type: 'event', status: 'confirmed', date: withOffset(12), startTime: '18:00', endTime: '20:00', location: 'Southern Wellbeing Center', description: '' },
+        { id: 6, organization: 'Southern Care Network', title: 'Youth Awareness Workshop', type: 'awareness', status: 'confirmed', date: withOffset(-3), startTime: '10:00', endTime: '12:30', location: 'Mount Lebanon Mobile Unit', description: '' },
+        { id: 7, organization: 'Community Health NGO', title: 'Cancelled Field Visit', type: 'event', status: 'canceled', date: withOffset(-1), startTime: '09:00', endTime: '11:00', location: 'Central Health Clinic', description: 'Cancelled due to weather conditions.' },
+        { id: 8, organization: 'Coastal Recovery Group', title: 'Psychological First Aid Training', type: 'training', status: 'confirmed', date: withOffset(16), startTime: '09:00', endTime: '15:00', location: 'Central Health Clinic', description: '' },
+        { id: 9, organization: 'Community Health NGO', title: 'Mental Health Awareness Radio Spot Recording', type: 'awareness', status: 'canceled', date: withOffset(6), startTime: '13:00', endTime: '14:00', location: '', description: '' },
+        { id: 10, organization: 'NMHP', title: 'Monthly Coordination Meeting', type: 'event', status: 'confirmed', date: withOffset(0), startTime: '15:00', endTime: '16:00', location: 'Online', description: '' }
     ];
     mockData.calendarEventNextId = 11;
 })();
 
 let calendarView = {
     mode: 'month',
-    currentDate: new Date()
+    currentDate: new Date(),
+    // Administrator only: '' shows every organization's events.
+    organization: ''
 };
 
 // ===== Resources & Help mock data =====
@@ -402,11 +461,22 @@ mockData.resources = {
         { term: 'Sub-Activity', definition: 'A specific, catalog-defined type of work reported under a broader activity category.' },
         { term: 'Focal Person', definition: 'The designated contact person within an NGO for a specific reporting area, such as 4Ws or Substance Use.' }
     ],
-    annualReports: [
-        { title: 'MHIS Annual Report 2023', year: 2023, href: '#' },
-        { title: 'MHIS Annual Report 2022', year: 2022, href: '#' },
-        { title: 'MHIS Annual Report 2021', year: 2021, href: '#' },
-        { title: 'National Mental Health Programme Overview 2020', year: 2020, href: '#' }
+    annualReports4ws: [
+        { title: '4Ws Annual Report 2023', year: 2023, href: '#' },
+        { title: '4Ws Annual Report 2022', year: 2022, href: '#' },
+        { title: '4Ws Annual Report 2021', year: 2021, href: '#' }
+    ],
+    annualReportsSu: [
+        { title: 'Substance Use Annual Report 2023', year: 2023, href: '#' },
+        { title: 'Substance Use Annual Report 2022', year: 2022, href: '#' }
+    ],
+    // Sample entries only, to show where the list lives.
+    suSubActivities: [
+        { code: 'SU 1.1', category: 'Prevention', name: 'School-Based Prevention Programmes', definition: 'Structured prevention sessions delivered to students, teachers, or parents in a school setting.' },
+        { code: 'SU 1.2', category: 'Prevention', name: 'Community Awareness and Prevention', definition: 'Awareness and prevention activities delivered to communities, families, or workplaces.' },
+        { code: 'SU 2.1', category: 'Treatment', name: 'Outpatient Treatment Services', definition: 'Assessment, counselling, and treatment for substance use disorders without an overnight stay.' },
+        { code: 'SU 2.2', category: 'Treatment', name: 'Residential Treatment and Rehabilitation', definition: 'Treatment and rehabilitation services delivered in a residential setting.' },
+        { code: 'SU 3.1', category: 'Harm Reduction', name: 'Outreach and Harm Reduction Services', definition: 'Outreach, overdose prevention, and needle and syringe programmes for people who use drugs.' }
     ],
     contact: {
         organization: 'National Mental Health Programme (NMHP)',
@@ -564,9 +634,9 @@ mockData.announcementGroups = [
 ];
 
 mockData.announcementLogs = [
-    { id: 1, groupId: 1, groupName: 'Beirut Facility-Based Services', title: 'Updated Facility Service Guidelines', message: 'Please review the updated clinical service guidelines for facility-based programs, effective immediately.', sentDate: '2025-05-15', sentBy: 'NMHP Administrator', recipients: ['Community Health NGO'] },
-    { id: 2, groupId: 2, groupName: 'WHO-Funded Programs', title: 'WHO Reporting Deadline Reminder', message: 'A reminder that WHO-funded activity reports for this quarter are due by the end of the month.', sentDate: '2025-06-02', sentBy: 'NMHP Administrator', recipients: ['Community Health NGO'] },
-    { id: 3, groupId: 1, groupName: 'Beirut Facility-Based Services', title: 'Beirut Facility Site Visits Scheduled', message: 'NMHP will be conducting routine site visits to Beirut-based facilities over the coming weeks.', sentDate: '2025-06-20', sentBy: 'NMHP Administrator', recipients: ['Community Health NGO'] }
+    { id: 1, groupId: 1, groupName: 'Beirut Facility-Based Services', title: 'Updated Facility Service Guidelines', message: 'Please review the updated clinical service guidelines for facility-based programs, effective immediately.', sentDate: '2025-05-15', recipients: ['Community Health NGO', 'Southern Care Network'], readBy: ['Community Health NGO', 'Southern Care Network'] },
+    { id: 2, groupId: 2, groupName: 'WHO-Funded Programs', title: 'WHO Reporting Deadline Reminder', message: 'A reminder that WHO-funded activity reports for this quarter are due by the end of the month.', sentDate: '2025-06-02', recipients: ['Community Health NGO', 'Southern Care Network', 'Coastal Recovery Group'], readBy: ['Community Health NGO'] },
+    { id: 3, groupId: 1, groupName: 'Beirut Facility-Based Services', title: 'Beirut Facility Site Visits Scheduled', message: 'NMHP will be conducting routine site visits to Beirut-based facilities over the coming weeks.', sentDate: '2025-06-20', recipients: ['Community Health NGO', 'Southern Care Network'], readBy: [] }
 ];
 
 function getLastSentDateForGroup(groupId) {

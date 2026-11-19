@@ -21,9 +21,9 @@ function initializeEventListeners() {
         showToast('Changing the password is simulated in this POC.', 'info');
     });
 
-    // Calendar shortcut
+    // Calendar shortcut (shown only to approved NGOs, see startApp)
     document.getElementById('calendarShortcutBtn').addEventListener('click', () => {
-        navigateTo(isAdminUser() ? 'event-reviews' : 'events-calendar');
+        navigateTo('events-calendar');
     });
 
     // Notification Bell
@@ -32,6 +32,9 @@ function initializeEventListeners() {
     // Account Menu
     document.getElementById('accountBtn').addEventListener('click', toggleAccountDropdown);
     document.addEventListener('click', handleOutsideClick);
+
+    // Esc closes the topmost dialog, panel or menu (shared-ui.js)
+    document.addEventListener('keydown', handleEscapeKey);
 
     // Notification Modal
     document.getElementById('closeNotifications').addEventListener('click', closeNotificationModal);
@@ -44,7 +47,7 @@ function initializeEventListeners() {
     // Reusable Form Modal
     document.getElementById('closeFormModal').addEventListener('click', closeFormModal);
     document.getElementById('formModalOverlay').addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) {
+        if (e.target === e.currentTarget && e.currentTarget.dataset.dismissOnBackdrop !== 'false') {
             closeFormModal();
         }
     });
@@ -65,16 +68,54 @@ function initializeEventListeners() {
     });
 }
 
+// An activity being added or edited with changes that are not saved yet.
+function hasUnsavedActivityChanges() {
+    return appState.currentPage === 'activities'
+        && activitiesView.mode === 'editor'
+        && !!activityEditor && activityEditor.dirty && !activityEditor.viewOnly;
+}
+
+// Same question the editor's Cancel button asks, for any other way out of
+// the editor (sidebar, breadcrumb, top-bar calendar, notification action).
+function confirmDiscardActivityChanges(page) {
+    showConfirmDialog({
+        title: 'Discard Unsaved Changes?',
+        message: 'You have unsaved changes to this activity. Leave and discard them?',
+        confirmLabel: 'Discard Changes',
+        tone: 'danger',
+        onConfirm: () => {
+            activityEditor = null;
+            activitiesView.mode = 'list';
+            if (page === 'resources-help') {
+                resourcesHelpView.mode = 'landing';
+            }
+            setActivePage(page);
+            renderPage(page);
+            closeNotificationModal();
+        }
+    });
+}
+
 // Navigation Handler
 function handleNavigation(e) {
     e.preventDefault();
     const page = e.currentTarget.getAttribute('data-page');
 
+    if (hasUnsavedActivityChanges()) {
+        // The Activities link itself also leaves the editor, so it asks too.
+        confirmDiscardActivityChanges(page);
+        return;
+    }
+
     const proceedToPage = () => {
         if (page === 'activities') {
-            // A direct sidebar click always returns to the My Activities list.
+            // A direct sidebar click always returns to the Activities list.
             activitiesView.mode = 'list';
             activityEditor = null;
+        }
+        if (page === 'resources-help') {
+            // A direct sidebar (or breadcrumb) click always returns to the landing.
+            resourcesHelpView.mode = 'landing';
         }
 
         setActivePage(page);
@@ -99,16 +140,35 @@ function handleNavigation(e) {
     proceedToPage();
 }
 
-// Activate a sidebar item and update state (also used for internal links)
+// Activate a sidebar item and update state (also used for internal links).
+// Opening a page of another area (a platform, or MHIS) switches the sidebar
+// and the top bar to that area. A page opened from a list page keeps that
+// list's sidebar item highlighted.
 function setActivePage(page) {
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.toggle('active', item.getAttribute('data-page') === page);
-    });
     appState.currentPage = page;
+    if (page !== 'organization-profile') {
+        // Leaving the profile ends an Update and Resubmit that was not resubmitted.
+        registrationEditView.updating = false;
+    }
+    const area = getAreaForPage(page);
+    if (area !== appState.currentArea) {
+        appState.currentArea = area;
+        renderSidebarNav();
+        updateTopBarArea();
+    }
+    const navPage = BREADCRUMB_PARENTS[page] || page;
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.toggle('active', item.getAttribute('data-page') === navPage);
+    });
 }
 
 // Navigate programmatically (used by in-page links)
 function navigateTo(page) {
+    if (hasUnsavedActivityChanges()) {
+        confirmDiscardActivityChanges(page);
+        return;
+    }
+
     const proceedToPage = () => {
         setActivePage(page);
         renderPage(page);
@@ -134,6 +194,32 @@ function navigateTo(page) {
 
 // Page Rendering
 function renderPage(page) {
+    if (!getAllowedPages().includes(page)) {
+        page = 'home';
+        setActivePage(page);
+    }
+    renderPageBody(page);
+    insertBreadcrumb(page);
+}
+
+// Every page except Home starts with a breadcrumb that names its sidebar
+// group (for an NGO, the platform it belongs to).
+function insertBreadcrumb(page) {
+    const html = renderBreadcrumb(page);
+    if (!html) {
+        return;
+    }
+    const container = document.getElementById('page-container');
+    container.insertAdjacentHTML('afterbegin', html);
+    container.querySelectorAll('.breadcrumb-link').forEach(link => {
+        // Same behaviour as a sidebar click, including the unsaved-changes check.
+        link.setAttribute('data-page', link.getAttribute('data-crumb-page'));
+        link.addEventListener('click', handleNavigation);
+    });
+    refreshLucideIcons();
+}
+
+function renderPageBody(page) {
     const container = document.getElementById('page-container');
 
     if (!getAllowedPages().includes(page)) {
@@ -172,13 +258,13 @@ function renderPage(page) {
             container.innerHTML = renderOrganizationProfilePage();
             attachOrganizationProfileListeners();
             break;
-        case 'facilities':
-            container.innerHTML = renderFacilitiesPage();
-            attachFacilitiesListeners();
+        case '4ws-overview':
+            container.innerHTML = renderFourWsOverviewPage();
+            attachPlatformOverviewListeners();
             break;
-        case 'providers':
-            container.innerHTML = renderProvidersPage();
-            attachProvidersListeners();
+        case 'su-overview':
+            container.innerHTML = renderSubstanceUseOverviewPage();
+            attachPlatformOverviewListeners();
             break;
         case 'activities':
             container.innerHTML = renderActivitiesPage();
@@ -188,9 +274,9 @@ function renderPage(page) {
             container.innerHTML = renderMyDashboardPage();
             attachMyDashboardListeners();
             break;
-        case 'advanced-dashboard':
-            container.innerHTML = renderAdvancedDashboardPage();
-            attachAdvancedDashboardListeners();
+        case 'su-dashboard':
+            container.innerHTML = renderSubstanceUseDashboardPage();
+            attachMyDashboardListeners();
             break;
         case 'events-calendar':
             container.innerHTML = renderEventsCalendarPage();
@@ -235,6 +321,14 @@ function renderPage(page) {
         case 'pending-custom-values':
             container.innerHTML = renderPendingCustomValuesPage();
             attachPendingCustomValuesListeners();
+            break;
+        case 'organization-management':
+            container.innerHTML = renderOrganizationManagementPage();
+            attachOrganizationManagementListeners();
+            break;
+        case 'organization-detail':
+            container.innerHTML = renderOrganizationDetailPage();
+            attachOrganizationDetailListeners();
             break;
         case 'user-management':
             container.innerHTML = renderUserManagementPage();
@@ -291,7 +385,14 @@ function startApp() {
     loginScreen.hidden = true;
     topBar.hidden = false;
     appShell.hidden = false;
+    // Every sign-in opens on MHIS Home, the same page each time.
+    appState.currentArea = 'mhis';
+    appState.currentPage = 'home';
     updateTopBarIdentity();
+    updateTopBarArea();
+    // The calendar icon opens the Events Calendar, so it shows only to users
+    // who have one (not the administrator, not an NGO awaiting approval).
+    document.getElementById('calendarShortcutBtn').hidden = !getAllowedPages().includes('events-calendar');
     updateNotificationBadge();
     renderSidebarNav();
     navigateTo('home');
@@ -317,6 +418,7 @@ function signInAs(accountId) {
     activitiesView.mode = 'list';
     activityEditor = null;
     adminView.selectedRegistrationId = null;
+    organizationProfileView.tab = 'details';
     startApp();
 }
 
@@ -327,6 +429,23 @@ function handleSignOut() {
         document.getElementById('accountDropdown').style.display = 'none';
         startApp();
     };
+
+    // Same rule as every other way out of the activity editor (UX-BRIEF).
+    if (hasUnsavedActivityChanges()) {
+        document.getElementById('accountDropdown').style.display = 'none';
+        showConfirmDialog({
+            title: 'Discard Unsaved Changes?',
+            message: 'You have unsaved changes to this activity. Log out and discard them?',
+            confirmLabel: 'Log Out',
+            tone: 'danger',
+            onConfirm: () => {
+                activityEditor = null;
+                activitiesView.mode = 'list';
+                proceedToSignOut();
+            }
+        });
+        return;
+    }
 
     if (appState.profileDirty) {
         showConfirmDialog({
@@ -350,7 +469,7 @@ function updateTopBarIdentity() {
     if (!account) {
         return;
     }
-    const label = account.id === 'ngo-existing' ? mockData.organization.name : account.organization;
+    const label = account.role === 'ngo' ? getCurrentOrganizationName() : account.organization;
     document.getElementById('topBarOrgName').textContent = label;
 }
 

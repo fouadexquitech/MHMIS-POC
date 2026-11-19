@@ -123,7 +123,21 @@ function openWhatsNewForm(id) {
                 id: Math.max(0, ...mockData.resources.whatsNew.map(x => x.id)) + 1,
                 title, date, description
             });
-            showToast('What\'s New entry added.', 'success');
+            // What's New has no block on the NGO home page: each new entry is
+            // announced once through the notification bell instead.
+            mockData.notifications.unshift({
+                id: Math.max(0, ...mockData.notifications.map(n => n.id)) + 1,
+                audience: 'ngo',
+                type: 'system',
+                title: `What\u2019s New: ${title}`,
+                preview: description,
+                fullContent: description,
+                timestamp: 'Just now',
+                unread: true,
+                action: 'View What\u2019s New',
+                resourceTopic: 'whats-new'
+            });
+            showToast('What\'s New entry added. Organizations are notified through the notification bell.', 'success');
         }
         closeFormModal();
         renderPage('whats-new-management');

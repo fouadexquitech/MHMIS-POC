@@ -1,8 +1,10 @@
 // ===== Administrator: organization registrations =====
 let adminView = {
     selectedRegistrationId: null,
-    statusFilter: '',
-    search: ''
+    // The list opens on the registrations waiting for a decision.
+    statusFilter: REGISTRATION_STATUS.pendingReview,
+    search: '',
+    reviewTab: 'details'
 };
 
 function renderAdminHomePage() {
@@ -25,22 +27,22 @@ function renderAdminHomePage() {
                         <div class="tile tile-action" data-admin-tile="registrations">
                             <div class="tile-icon"><i data-lucide="file-check"></i></div>
                             <div class="tile-value">${pending}</div>
-                            <div class="tile-label">New Organization Registrations</div>
+                            <div class="tile-label">Submitted Profiles</div>
                         </div>
                         <div class="tile tile-action" data-admin-tile="event-reviews">
                             <div class="tile-icon"><i data-lucide="calendar-check"></i></div>
                             <div class="tile-value">${eventsPending}</div>
-                            <div class="tile-label">Events to Review</div>
+                            <div class="tile-label">Submitted Events</div>
                         </div>
                         <div class="tile tile-action" data-admin-tile="facility-duplicates">
                             <div class="tile-icon"><i data-lucide="git-merge"></i></div>
                             <div class="tile-value">${duplicatesPending}</div>
-                            <div class="tile-label">Potential Duplicate Facilities</div>
+                            <div class="tile-label">Possible Duplicate Facilities</div>
                         </div>
                         <div class="tile tile-action" data-admin-tile="pending-custom-values">
                             <div class="tile-icon"><i data-lucide="list-plus"></i></div>
                             <div class="tile-value">${customValuesPending}</div>
-                            <div class="tile-label">Pending Custom Values</div>
+                            <div class="tile-label">Submitted Custom Values</div>
                         </div>
                     </div>
                 </div>
@@ -54,8 +56,13 @@ function renderAdminHomePage() {
                     <div class="resource-card-grid">
                         <button type="button" class="resource-card" id="adminRegistrationsBtn">
                             <div class="resource-card-icon"><i data-lucide="file-check"></i></div>
-                            <div class="resource-card-label">Review Organization Registrations</div>
-                            <div class="resource-card-description">Approve or reject pending organization applications.</div>
+                            <div class="resource-card-label">Review Submitted Profiles</div>
+                            <div class="resource-card-description">Approve new organizations or ask them for changes.</div>
+                        </button>
+                        <button type="button" class="resource-card" id="adminOrganizationManagementBtn">
+                            <div class="resource-card-icon"><i data-lucide="building-2"></i></div>
+                            <div class="resource-card-label">Organization Management</div>
+                            <div class="resource-card-description">Check an approved organization's profile, facilities, and providers.</div>
                         </button>
                         <button type="button" class="resource-card" id="adminUserManagementBtn">
                             <div class="resource-card-icon"><i data-lucide="users-round"></i></div>
@@ -80,6 +87,8 @@ function attachAdminHomeListeners() {
     };
     document.getElementById('adminRegistrationsBtn')?.addEventListener('click', goToRegistrations);
     document.querySelector('[data-admin-tile="registrations"]')?.addEventListener('click', goToRegistrations);
+    makeKeyboardActivatable(document.querySelectorAll('.tile-action[data-admin-tile]'));
+    document.getElementById('adminOrganizationManagementBtn')?.addEventListener('click', () => navigateTo('organization-management'));
     document.getElementById('adminUserManagementBtn')?.addEventListener('click', () => navigateTo('user-management'));
     document.getElementById('adminCreateAnnouncementBtn')?.addEventListener('click', () => openComposeAnnouncementForm());
 
@@ -115,7 +124,12 @@ function renderOrganizationRegistrationsPage() {
                     <div class="cell-primary">${escapeHtml(r.organization)}</div>
                     <div class="cell-secondary">${escapeHtml(r.acronym || '')}</div>
                 </td>
-                <td>${escapeHtml(r.email || '—')}</td>
+                <td>
+                    ${escapeHtml(r.email || '—')}
+                    ${r.status === REGISTRATION_STATUS.pendingReview && findPersonalEmailMatch(r)
+                        ? '<div class="cell-flag"><i data-lucide="triangle-alert"></i><span>Possible personal email</span></div>'
+                        : ''}
+                </td>
                 <td>${escapeHtml(r.submittedDate || 'Not submitted')}</td>
                 <td><span class="reg-status reg-status-${registrationStatusClass(r.status)}"><i data-lucide="${registrationStatusIcon(r.status)}"></i><span>${escapeHtml(r.status)}</span></span></td>
                 <td class="actions-cell">
@@ -129,16 +143,17 @@ function renderOrganizationRegistrationsPage() {
         : '<tr><td colspan="5" class="empty-cell">No registrations match the current filters.</td></tr>';
 
     const statusOptions = [
-        REGISTRATION_STATUS.incomplete,
         REGISTRATION_STATUS.pendingReview,
+        REGISTRATION_STATUS.changesRequested,
         REGISTRATION_STATUS.approved,
-        REGISTRATION_STATUS.rejected
+        REGISTRATION_STATUS.declined,
+        REGISTRATION_STATUS.incomplete
     ];
 
     return `
         <div class="page">
             <div class="page-header">
-                <h1 class="page-title">Organization Registrations</h1>
+                <h1 class="page-title">Submitted Profiles</h1>
             </div>
             <div class="list-toolbar">
                 <div class="search-group">
@@ -178,94 +193,180 @@ function attachOrganizationRegistrationsListeners() {
     document.querySelectorAll('[data-review]').forEach(btn => {
         btn.addEventListener('click', () => {
             adminView.selectedRegistrationId = Number(btn.getAttribute('data-review'));
+            adminView.reviewTab = 'details';
             navigateTo('registration-review');
         });
     });
 }
 
+// ===== Possible personal email =====
+// A pattern cannot tell a shared mailbox (info@ngo.org) from a person's
+// address on the same domain (yourname@ngo.org). Instead, the sign-in email
+// is compared with the people named in the same profile: if it contains the
+// director's or a focal person's name, NMHP is warned before approving.
+const PERSON_NAME_TITLES = ['dr', 'mr', 'mrs', 'ms', 'prof', 'eng'];
+
+function getPersonNameParts(name) {
+    return (name || '')
+        .toLowerCase()
+        .split(/[\s.\-']+/)
+        .map(part => part.replace(/[^a-z]/g, ''))
+        .filter(part => part.length >= 3 && !PERSON_NAME_TITLES.includes(part));
+}
+
+function findPersonalEmailMatch(registration) {
+    const email = registration.email || '';
+    const localPart = email.split('@')[0].toLowerCase().replace(/[^a-z]/g, '');
+    if (!localPart) {
+        return null;
+    }
+    const people = [{ name: registration.directorName, role: 'Director' }]
+        .concat((registration.focalPersons || []).map(f => ({ name: f.name, role: `${f.area} Focal Person` })));
+    return people.find(person => getPersonNameParts(person.name).some(part => localPart.includes(part))) || null;
+}
+
+function renderPersonalEmailWarning(registration) {
+    const match = findPersonalEmailMatch(registration);
+    if (!match) {
+        return '';
+    }
+    return `
+        <div class="warning-banner" role="status">
+            <i data-lucide="triangle-alert"></i>
+            <span><strong>Possible personal email.</strong> The sign-in email ${escapeHtml(registration.email)} matches the name of ${escapeHtml(match.name)} (${escapeHtml(match.role)}). Organizations must sign in with a shared organization address, so check it before approving.</span>
+        </div>`;
+}
+
+// ---------- Registration Review ----------
+// The submitted profile, read-only, in the same tabs the organization filled
+// (and that Organization Management shows after approval). The decision
+// buttons sit in the page header: Approve, Request Changes, Decline.
 function renderRegistrationReviewPage() {
     const r = getRegistrationById(adminView.selectedRegistrationId);
     if (!r) {
         return renderOrganizationRegistrationsPage();
     }
+    const pending = r.status === REGISTRATION_STATUS.pendingReview;
+    const tab = adminView.reviewTab;
+    const facilities = r.facilities || [];
+    const providers = r.providers || [];
 
-    const values = {
-        name: r.organization, acronym: r.acronym, phone: r.phone, mobile: r.mobile, email: r.email,
-        directorName: r.directorName, directorEmail: r.directorEmail, directorMobile: r.directorMobile,
-        sectors: r.sectors, website: r.website, linkedin: r.linkedin, daleelMadani: r.daleelMadani
-    };
-
-    let actionsHTML = '';
-    if (r.status === REGISTRATION_STATUS.pendingReview) {
-        actionsHTML = `
-            <div class="form-actions">
-                <button type="button" class="btn btn-primary" id="approveRegistrationBtn">Approve</button>
-                <button type="button" class="btn btn-secondary" id="rejectRegistrationBtn">Reject</button>
+    let statusHTML = '';
+    if (r.status === REGISTRATION_STATUS.changesRequested) {
+        statusHTML = `
+            <div class="reason-box reason-box-warning">
+                <div class="reason-box-label">Changes requested${r.reviewedDate ? ` on ${escapeHtml(r.reviewedDate)}` : ''}</div>
+                <p>${escapeHtml(r.reviewMessage)}</p>
             </div>`;
-    } else if (r.status === REGISTRATION_STATUS.rejected) {
-        actionsHTML = `
+    } else if (r.status === REGISTRATION_STATUS.declined) {
+        statusHTML = `
             <div class="reason-box">
-                <div class="reason-box-label">Rejection reason sent to the organization</div>
-                <p>${escapeHtml(r.rejectionReason)}</p>
+                <div class="reason-box-label">Declined${r.reviewedDate ? ` on ${escapeHtml(r.reviewedDate)}` : ''}</div>
+                <p>${escapeHtml(r.reviewMessage)}</p>
             </div>`;
     } else if (r.status === REGISTRATION_STATUS.incomplete) {
-        actionsHTML = '<div class="info-banner">This organization has not submitted its profile yet.</div>';
-    } else {
-        actionsHTML = '<div class="info-banner">This registration has been approved.</div>';
+        statusHTML = '<div class="info-banner">This organization has not submitted its profile yet.</div>';
+    } else if (r.status === REGISTRATION_STATUS.approved) {
+        statusHTML = `<div class="info-banner">Approved${r.reviewedDate ? ` on ${escapeHtml(r.reviewedDate)}` : ''}. The organization now appears in Organization Management.</div>`;
     }
+
+    const previousHTML = pending && r.previousRequest ? `
+        <div class="previous-request">
+            <span class="previous-request-label">Your previous request &middot; ${escapeHtml(r.previousRequest.date || '')}</span>
+            ${escapeHtml(r.previousRequest.message)}
+        </div>` : '';
+
+    const counts = {
+        focalPersons: (r.focalPersons || []).length,
+        facilities: facilities.length,
+        providers: providers.length
+    };
 
     return `
         <div class="page">
-            <button type="button" class="link-back" id="registrationBackBtn"><i data-lucide="arrow-left"></i> Back to Organization Registrations</button>
-            <div class="page-header">
+            <div class="page-header page-header-start">
                 <h1 class="page-title">${escapeHtml(r.organization)}</h1>
                 ${renderRegStatusPill(r.status)}
+                ${pending ? `
+                <div class="page-header-actions">
+                    <button type="button" class="btn btn-secondary" id="requestChangesBtn">Request Changes</button>
+                    <button type="button" class="btn btn-primary" id="approveRegistrationBtn">Approve</button>
+                    <span class="page-header-actions-divider" aria-hidden="true"></span>
+                    <button type="button" class="btn btn-danger-outline" id="declineRegistrationBtn">Decline</button>
+                </div>` : ''}
             </div>
-            <p class="status-text">Submitted registration details are read-only. NMHP can approve or reject the registration but cannot change the submitted information.</p>
-            ${r.submittedDate ? `<p class="status-text">Submitted on ${escapeHtml(r.submittedDate)}.</p>` : ''}
+            <p class="status-text">${r.submittedDate ? `Submitted on ${escapeHtml(r.submittedDate)} &middot; ` : ''}Sign-in email ${escapeHtml(r.email || '-')}. The submitted details are read-only.</p>
+            ${pending ? renderPersonalEmailWarning(r) : ''}
+            ${statusHTML}
+            ${previousHTML}
 
-            <div class="profile-form">
-                ${renderOrgProfileFields(values, true)}
-            </div>
-
-            ${renderFocalPersonsSection(r.focalPersons, true)}
-
-            ${actionsHTML}
+            ${renderProfileTabs(getOrgProfileTabs(counts), tab)}
+            ${renderProfilePanel('details', tab, renderOrgDetailsReadOnly(getRegistrationProfileValues(r)))}
+            ${renderProfilePanel('focal-persons', tab, renderFocalPersonsTab(r.focalPersons || [], { readOnly: true }))}
+            ${renderProfilePanel('facilities', tab, renderOrganizationRecordsTable('facility', facilities))}
+            ${renderProfilePanel('providers', tab, renderOrganizationRecordsTable('provider', providers))}
         </div>`;
 }
 
 function attachRegistrationReviewListeners() {
-    document.getElementById('registrationBackBtn')?.addEventListener('click', () => navigateTo('organization-registrations'));
+    const r = getRegistrationById(adminView.selectedRegistrationId);
+    if (!r) {
+        attachOrganizationRegistrationsListeners();
+        return;
+    }
+    attachProfileTabs(id => { adminView.reviewTab = id; });
+    attachOrganizationRecordsTables(r.facilities || [], r.providers || [], r.organization);
 
     document.getElementById('approveRegistrationBtn')?.addEventListener('click', () => {
-        const r = approveRegistration(adminView.selectedRegistrationId);
-        showToast(`${r.organization} has been approved.`, 'success');
-        renderPage('registration-review');
-    });
-
-    document.getElementById('rejectRegistrationBtn')?.addEventListener('click', () => {
-        openFormModal(
-            'Reject Registration',
-            `<div class="form-field">
-                <label for="rejectReason">Reason <span class="required">*</span></label>
-                <textarea id="rejectReason" rows="4"></textarea>
-                <div class="field-error" id="rejectReason-error"></div>
-            </div>`,
-            `<button type="button" class="btn btn-secondary" id="cancelRejectBtn">Cancel</button>
-             <button type="button" class="btn btn-primary" id="confirmRejectBtn">Reject Registration</button>`
-        );
-
-        document.getElementById('cancelRejectBtn').addEventListener('click', closeFormModal);
-        document.getElementById('confirmRejectBtn').addEventListener('click', () => {
-            const reason = document.getElementById('rejectReason').value.trim();
-            if (!reason) {
-                document.getElementById('rejectReason-error').textContent = 'A reason is required.';
-                return;
+        showConfirmDialog({
+            title: 'Approve Registration?',
+            message: `${r.organization} will get full access to MHIS. NMHP emails the decision to ${r.email} and the organization's focal persons.`,
+            confirmLabel: 'Approve',
+            onConfirm: () => {
+                approveRegistration(r.id);
+                showToast(`${r.organization} is approved.`, 'success');
+                renderPage('registration-review');
             }
-            const r = rejectRegistration(adminView.selectedRegistrationId, reason);
-            closeFormModal();
-            showToast(`${r.organization} has been rejected.`, 'success');
-            renderPage('registration-review');
         });
+    });
+    document.getElementById('requestChangesBtn')?.addEventListener('click', () => openRegistrationDecisionDialog(r, 'changes'));
+    document.getElementById('declineRegistrationBtn')?.addEventListener('click', () => openRegistrationDecisionDialog(r, 'decline'));
+}
+
+// Request Changes (the organization updates and resubmits) or Decline.
+// Both need a message, which NMHP emails to the organization.
+function openRegistrationDecisionDialog(r, kind) {
+    const changes = kind === 'changes';
+    openFormModal(changes ? 'Request Changes' : 'Decline Registration', `
+        <form id="registrationDecisionForm" class="modal-form" novalidate>
+            <p class="status-text">${changes
+                ? `${escapeHtml(r.organization)} can update its profile and resubmit it for review.`
+                : 'Use Decline for registrations that are not genuine organizations, duplicates or tests.'}</p>
+            <div class="form-field">
+                <label for="decisionMessage">${changes ? 'What should the organization update?' : 'Reason'} <span class="required">*</span></label>
+                <textarea id="decisionMessage" rows="4" data-required="true" data-error-label="${changes ? 'the changes to request' : 'the reason'}"></textarea>
+                <div class="field-error" id="decisionMessage-error"></div>
+            </div>
+            <p class="decision-email-note"><i data-lucide="mail"></i><span>NMHP emails this to ${escapeHtml(r.email)} and the organization's focal persons, and sends an MHIS notification.</span></p>
+        </form>`,
+        `<button type="button" class="modal-btn" id="cancelDecisionBtn">Cancel</button>
+         <button type="button" class="modal-btn ${changes ? 'primary' : 'danger'}" id="confirmDecisionBtn">${changes ? 'Send Request' : 'Decline Registration'}</button>`);
+
+    document.getElementById('cancelDecisionBtn').addEventListener('click', closeFormModal);
+    document.getElementById('confirmDecisionBtn').addEventListener('click', () => {
+        const form = document.getElementById('registrationDecisionForm');
+        if (!validateModalForm(form)) {
+            return;
+        }
+        const message = document.getElementById('decisionMessage').value.trim();
+        if (changes) {
+            requestRegistrationChanges(r.id, message);
+            showToast(`Change request sent to ${r.organization}.`, 'success');
+        } else {
+            declineRegistration(r.id, message);
+            showToast(`${r.organization} is declined.`, 'success');
+        }
+        closeFormModal();
+        renderPage('registration-review');
     });
 }

@@ -1,33 +1,42 @@
-// ===== Providers =====
-function renderProvidersPage() {
-    const facilityNames = mockData.facilities.map(f => f.name);
+// ===== Providers (a tab of Organization Profile) =====
+// Same rule as Facilities: the list works on the signed-in organization's
+// own providers (approved NGO or registering organization).
+function getProviderRecords() {
+    const registration = getCurrentRegistration();
+    return registration ? registration.providers : mockData.providers;
+}
+
+function providerRecordsChanged() {
+    if (getCurrentRegistration()) {
+        saveDemoState();
+        refreshRegistrationChecklist();
+    }
+}
+
+function renderProvidersList() {
+    const facilityNames = getFacilityRecords().map(f => f.name);
     return `
-        <div class="page">
-            <div class="page-header">
-                <h1 class="page-title">Providers</h1>
-                <button class="btn btn-primary" id="addProviderBtn">
-                    <i data-lucide="plus"></i><span>Add Provider</span>
-                </button>
+        <div class="list-toolbar">
+            <div class="search-group">
+                <i data-lucide="search"></i>
+                <input type="search" id="providerSearch" placeholder="Search providers..." aria-label="Search providers" />
             </div>
-            <div class="list-toolbar">
-                <div class="search-group">
-                    <i data-lucide="search"></i>
-                    <input type="search" id="providerSearch" placeholder="Search providers..." aria-label="Search providers" />
-                </div>
-                ${renderSelect('providerFacilityFilter', 'Facility', facilityNames, '')}
-                ${renderSelect('providerTypeFilter', 'Provider Type', mockData.providerTypes, '')}
-            </div>
-            <div class="result-count" id="providerCount"></div>
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Provider Name</th><th>Provider Type / Profession</th><th>Facility</th>
-                        <th>Phone</th><th>Email</th><th class="actions-col">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="providerTableBody"></tbody>
-            </table>
-        </div>`;
+            ${renderSelect('providerFacilityFilter', 'Facility', facilityNames, '')}
+            ${renderSelect('providerTypeFilter', 'Provider Type', mockData.providerTypes, '')}
+            <button type="button" class="btn btn-primary list-toolbar-action" id="addProviderBtn">
+                <i data-lucide="plus"></i><span>Add Provider</span>
+            </button>
+        </div>
+        <div class="result-count" id="providerCount"></div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Provider Name</th><th>Provider Type / Profession</th><th>Facility</th>
+                    <th>Phone</th><th>Email</th><th class="actions-col">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="providerTableBody"></tbody>
+        </table>`;
 }
 
 function attachProvidersListeners() {
@@ -42,8 +51,8 @@ function getFilteredProviders() {
     const q = (document.getElementById('providerSearch')?.value || '').toLowerCase();
     const facility = document.getElementById('providerFacilityFilter')?.value || '';
     const type = document.getElementById('providerTypeFilter')?.value || '';
-    return mockData.providers.filter(p =>
-        (!q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)) &&
+    return getProviderRecords().filter(p =>
+        (!q || p.name.toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q)) &&
         (!facility || p.facility === facility) &&
         (!type || p.type === type));
 }
@@ -53,7 +62,9 @@ function renderProviderRows() {
     const body = document.getElementById('providerTableBody');
     document.getElementById('providerCount').textContent = `${rows.length} provider${rows.length === 1 ? '' : 's'} found`;
     if (rows.length === 0) {
-        body.innerHTML = `<tr><td colspan="6" class="empty-row">No providers match your filters.</td></tr>`;
+        body.innerHTML = getProviderRecords().length === 0
+            ? `<tr><td colspan="6" class="empty-row">No providers added yet.</td></tr>`
+            : `<tr><td colspan="6" class="empty-row">No providers match your filters.</td></tr>`;
         return;
     }
     body.innerHTML = rows.map(p => `
@@ -82,23 +93,24 @@ function renderProviderRows() {
 }
 
 function viewProvider(id) {
-    const p = mockData.providers.find(x => x.id === id);
+    const p = getProviderRecords().find(x => x.id === id);
     if (!p) return;
     const rows = [
         ['Provider Name', p.name], ['Provider Type / Profession', p.type],
         ['Facility', p.facility], ['Phone', p.phone], ['Email', p.email]
     ];
     openFormModal('Provider Details',
-        `<dl class="detail-list">${rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl>`,
+        `<dl class="detail-list">${rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v || '-')}</dd></div>`).join('')}</dl>`,
         `<button class="modal-btn" id="detailCloseBtn">Close</button>`);
     document.getElementById('detailCloseBtn').addEventListener('click', closeFormModal);
 }
 
 function openProviderForm(id) {
     const editing = typeof id === 'number';
-    const p = editing ? mockData.providers.find(x => x.id === id) : { name: '', type: '', facility: '', phone: '', email: '' };
+    const records = getProviderRecords();
+    const p = editing ? records.find(x => x.id === id) : { name: '', type: '', facility: '', phone: '', email: '' };
     const typeOpts = mockData.providerTypes.map(t => `<option value="${escapeHtml(t)}"${t === p.type ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('');
-    const facOpts = mockData.facilities.map(fac => `<option value="${escapeHtml(fac.name)}"${fac.name === p.facility ? ' selected' : ''}>${escapeHtml(fac.name)}</option>`).join('');
+    const facOpts = getFacilityRecords().map(fac => `<option value="${escapeHtml(fac.name)}"${fac.name === p.facility ? ' selected' : ''}>${escapeHtml(fac.name)}</option>`).join('');
     openFormModal(editing ? 'Edit Provider' : 'Add Provider', `
         <form id="providerForm" class="modal-form" novalidate>
             <div class="form-field">
@@ -142,19 +154,21 @@ function openProviderForm(id) {
         };
         if (editing) {
             Object.assign(p, data);
-            showToast('Provider updated successfully.', 'success');
+            showToast('Provider updated.', 'success');
         } else {
-            data.id = Math.max(0, ...mockData.providers.map(x => x.id)) + 1;
-            mockData.providers.push(data);
-            showToast('Provider added successfully.', 'success');
+            data.id = Math.max(0, ...records.map(x => x.id)) + 1;
+            records.push(data);
+            showToast('Provider added.', 'success');
         }
         closeFormModal();
+        providerRecordsChanged();
         renderProviderRows();
     });
 }
 
 function deleteProvider(id) {
-    const p = mockData.providers.find(x => x.id === id);
+    const records = getProviderRecords();
+    const p = records.find(x => x.id === id);
     if (!p) return;
     showConfirmDialog({
         title: 'Delete Provider',
@@ -162,7 +176,8 @@ function deleteProvider(id) {
         confirmLabel: 'Delete',
         tone: 'danger',
         onConfirm: () => {
-            mockData.providers = mockData.providers.filter(x => x.id !== id);
+            records.splice(records.indexOf(p), 1);
+            providerRecordsChanged();
             showToast('Provider deleted.', 'success');
             renderProviderRows();
         }
@@ -171,25 +186,5 @@ function deleteProvider(id) {
 
 // Shared validation for modal forms (required inputs/selects + email format)
 function validateModalForm(form) {
-    let valid = true;
-    form.querySelectorAll('.field-error').forEach(el => (el.textContent = ''));
-    form.querySelectorAll('input, select').forEach(el => el.classList.remove('invalid'));
-
-    form.querySelectorAll('[data-required="true"]').forEach(input => {
-        const errorEl = document.getElementById(`${input.id}-error`);
-        if (!input.value.trim()) {
-            input.classList.add('invalid');
-            if (errorEl) errorEl.textContent = 'This field is required.';
-            valid = false;
-        }
-    });
-    const emailInput = form.querySelector('input[type="email"]');
-    if (emailInput && emailInput.value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value.trim())) {
-        emailInput.classList.add('invalid');
-        const errorEl = document.getElementById(`${emailInput.id}-error`);
-        if (errorEl) errorEl.textContent = 'Enter a valid email address.';
-        valid = false;
-    }
-    return valid;
+    return validateForm(form);
 }
-

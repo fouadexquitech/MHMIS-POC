@@ -92,15 +92,80 @@ const dashboardTabs = [
     }
 ];
 
+// Placeholder Substance Use dashboard built from the survey list. It only
+// demonstrates where the dashboard lives; its real content is not designed yet.
+const substanceUseDashboardTabs = [
+    {
+        id: 'su-surveys',
+        label: 'Surveys',
+        icon: 'file-text',
+        kpis: [
+            { label: 'Total Surveys', value: '7' },
+            { label: 'Submitted', value: '5' },
+            { label: 'Drafts', value: '2' },
+            { label: 'Reporting Years', value: '3' }
+        ],
+        table: {
+            title: 'Surveys by Type',
+            columns: ['Survey Type', 'Surveys', 'Submitted', 'Drafts'],
+            rows: [
+                ['Prevention', '3', '2', '1'],
+                ['Treatment', '2', '1', '1'],
+                ['Harm Reduction', '2', '2', '0']
+            ]
+        }
+    },
+    {
+        id: 'su-years',
+        label: 'Reporting Years',
+        icon: 'calendar-days',
+        kpis: [
+            { label: 'Current Reporting Year', value: '2025' },
+            { label: 'Surveys in 2025', value: '3' },
+            { label: 'Submitted in 2025', value: '1' },
+            { label: 'Last Submission', value: '28 Jan 2025' }
+        ],
+        table: {
+            title: 'Surveys by Reporting Year',
+            columns: ['Reporting Year', 'Surveys', 'Submitted', 'Drafts'],
+            rows: [
+                ['2025', '3', '1', '2'],
+                ['2024', '3', '3', '0'],
+                ['2023', '1', '1', '0']
+            ]
+        }
+    }
+];
+
 function renderMyDashboardPage() {
-    const tabsHTML = dashboardTabs.map((tab, index) => `
+    return renderDashboardTabsPage({
+        title: '4Ws Dashboard',
+        tabs: dashboardTabs,
+        lead: 'A snapshot of your logged 4Ws data across activities, beneficiaries, facilities, and funding.',
+        note: 'These reports summarise the data your organization has published. Move between tabs to explore each area.',
+        advancedDashboard: true
+    });
+}
+
+function renderSubstanceUseDashboardPage() {
+    return renderDashboardTabsPage({
+        title: 'Substance Use Dashboard',
+        tabs: substanceUseDashboardTabs,
+        lead: 'A snapshot of your Substance Use surveys by type and reporting year.',
+        note: 'Sample content only. The Substance Use dashboard reports are not final in this prototype.',
+        advancedDashboard: false
+    });
+}
+
+function renderDashboardTabsPage({ title, tabs, lead, note, advancedDashboard }) {
+    const tabsHTML = tabs.map((tab, index) => `
         <button class="tab ${index === 0 ? 'active' : ''}" data-dashboard-tab="${tab.id}">
             <i data-lucide="${tab.icon}"></i>
             <span>${tab.label}</span>
         </button>
     `).join('');
 
-    const panelsHTML = dashboardTabs.map((tab, index) => `
+    const panelsHTML = tabs.map((tab, index) => `
         <div class="tab-panel ${index === 0 ? 'active' : ''}" data-dashboard-panel="${tab.id}">
             <div class="dashboard-kpis">
                 ${tab.kpis.map(kpi => `
@@ -130,16 +195,16 @@ function renderMyDashboardPage() {
         <div class="page">
             <div class="page-header">
                 <div>
-                    <h1 class="page-title">My Dashboard</h1>
-                    <p class="page-lead">A snapshot of your logged 4Ws data across activities, beneficiaries, facilities, and funding.</p>
+                    <h1 class="page-title">${escapeHtml(title)}</h1>
+                    <p class="page-lead">${escapeHtml(lead)}</p>
                 </div>
-                <button class="btn btn-secondary" id="openAdvancedDashboardBtn">
+                ${advancedDashboard ? `<button class="btn btn-secondary" id="openAdvancedDashboardBtn" title="Opens the Power BI report in a new browser tab">
                     <i data-lucide="external-link"></i><span>Advanced Dashboard</span>
-                </button>
+                </button>` : ''}
             </div>
             <div class="dashboard-note">
                 <i data-lucide="info"></i>
-                <span>These reports summarise the data your organization has published. Move between tabs to explore each area.</span>
+                <span>${escapeHtml(note)}</span>
             </div>
             <div class="tabs">${tabsHTML}</div>
             ${panelsHTML}
@@ -161,34 +226,8 @@ function attachMyDashboardListeners() {
     document.getElementById('openAdvancedDashboardBtn')?.addEventListener('click', openAdvancedDashboard);
 }
 
-function renderAdvancedDashboardPage() {
-    return `
-        <div class="page">
-            <div class="page-header">
-                <h1 class="page-title">Advanced Dashboard</h1>
-            </div>
-            <div class="external-dashboard-card">
-                <div class="external-dashboard-icon">
-                    <i data-lucide="external-link"></i>
-                </div>
-                <h2 class="external-dashboard-title">Opens in a new browser tab</h2>
-                <p class="external-dashboard-text">
-                    The Advanced Dashboard is powered by an external Power BI report. Selecting the button below
-                    opens it in a separate browser tab so you keep this workspace open.
-                </p>
-                <p class="external-dashboard-url">${escapeHtml(ADVANCED_DASHBOARD_URL)}</p>
-                <button class="btn btn-primary" id="launchAdvancedDashboardBtn">
-                    <i data-lucide="external-link"></i><span>Open Advanced Dashboard</span>
-                </button>
-            </div>
-        </div>
-    `;
-}
-
-function attachAdvancedDashboardListeners() {
-    document.getElementById('launchAdvancedDashboardBtn')?.addEventListener('click', openAdvancedDashboard);
-}
-
+// The Advanced Dashboard is an external Power BI report, opened in a new
+// browser tab from the 4Ws Dashboard page.
 function openAdvancedDashboard() {
     window.open(ADVANCED_DASHBOARD_URL, '_blank', 'noopener');
 }

@@ -1,5 +1,5 @@
 // ===== Activities =====
-// The Activities destination has three in-page views: 'list' (My Activities),
+// The Activities destination has three in-page views: 'list' (Activities),
 // 'discovery' (catalog smart search) and 'editor' (full-page guided stepper).
 // No add/edit modal is used anywhere in this module.
 let activitiesView = { mode: 'list', discoveryQuery: '' };
@@ -168,7 +168,7 @@ function showActivitiesView(mode) {
     renderPage('activities');
 }
 
-// ---------- My Activities list ----------
+// ---------- Activities list ----------
 function renderMyActivitiesList() {
     const configOptions = mockData.activityConfigs
         .map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.code)} — ${escapeHtml(c.subActivity)}</option>`)
@@ -176,7 +176,7 @@ function renderMyActivitiesList() {
     return `
         <div class="page">
             <div class="page-header">
-                <h1 class="page-title">My Activities</h1>
+                <h1 class="page-title">Activities</h1>
                 <button class="btn btn-primary" id="logActivityBtn">
                     <i data-lucide="plus"></i><span>Add Activity</span>
                 </button>
@@ -385,7 +385,6 @@ function renderActivityDiscovery() {
         <div class="page">
             <div class="page-header">
                 <div>
-                    <button class="link-back" id="discoveryBackBtn"><i data-lucide="arrow-left"></i> Back to My Activities</button>
                     <h1 class="page-title">Add Activity</h1>
                     <p class="page-lead">What activity are you reporting?</p>
                 </div>
@@ -404,7 +403,6 @@ function renderActivityDiscovery() {
 }
 
 function attachActivityDiscoveryListeners() {
-    document.getElementById('discoveryBackBtn').addEventListener('click', () => showActivitiesView('list'));
     const input = document.getElementById('discoverySearch');
     input.addEventListener('input', () => {
         activitiesView.discoveryQuery = input.value;
@@ -514,7 +512,6 @@ function renderActivityEditorPage() {
     return `
         <div class="page activity-editor">
             <div class="editor-topbar">
-                <button class="link-back" id="editorBackBtn"><i data-lucide="arrow-left"></i> Back to My Activities</button>
                 <h1 class="page-title">${title}</h1>
                 ${readonly ? '<span class="readonly-tag">Read-only · completed record</span>' : ''}
             </div>
@@ -626,7 +623,6 @@ function renderActivityField(f, value, readonly) {
 
 function attachActivityEditorListeners() {
     const s = activityEditor;
-    document.getElementById('editorBackBtn').addEventListener('click', () => editorCancel());
     document.getElementById('editorCancelBtn').addEventListener('click', () => editorCancel());
 
     const changeBtn = document.getElementById('changeActivityBtn');
@@ -751,7 +747,7 @@ function editorCancel() {
     if (activityEditor && activityEditor.dirty && !activityEditor.viewOnly) {
         showConfirmDialog({
             title: 'Discard Unsaved Changes?',
-            message: 'Discard your changes and return to My Activities?',
+            message: 'Discard your changes and return to Activities?',
             confirmLabel: 'Discard Changes',
             tone: 'danger',
             onConfirm: proceedToCancel
@@ -817,16 +813,22 @@ function renderValidationSummary(issuesBySection) {
     });
     if (window.lucide) window.lucide.createIcons();
     summary.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    // Keyboard users land on the first section link, which opens that step.
+    const firstLink = summary.querySelector('button[data-goto-step]');
+    if (firstLink) firstLink.focus({ preventScroll: true });
 }
 
 function highlightMissingInStep() {
     const missing = stepMissingRequired(currentStepKey());
+    const inputs = [];
     missing.forEach(f => {
         const input = document.getElementById(`af-${f.id}`);
-        const err = document.getElementById(`af-${f.id}-error`);
-        if (input) input.classList.add('invalid');
-        if (err) err.textContent = 'This field is required.';
+        if (input) {
+            setFieldError(input, requiredFieldMessage(input));
+            inputs.push(input);
+        }
     });
+    focusFirstInvalid(inputs);
 }
 
 function persistActivity(state) {

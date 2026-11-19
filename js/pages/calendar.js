@@ -10,8 +10,29 @@ function getCalendarEventType(typeId) {
     return mockData.calendarEventTypes.find(t => t.id === typeId) || mockData.calendarEventTypes[0];
 }
 
+// The organization the signed-in user adds events for.
+function getCalendarOwnOrganization() {
+    return isAdminUser() ? 'NMHP' : getCurrentOrganizationName();
+}
+
+// The administrator sees every organization's events and can filter them by
+// organization.
+function getVisibleCalendarEvents() {
+    const org = isAdminUser() ? calendarView.organization : '';
+    return org ? mockData.calendarEvents.filter(e => e.organization === org) : mockData.calendarEvents;
+}
+
 function getEventsOnDate(isoDate) {
-    return mockData.calendarEvents.filter(e => e.date === isoDate);
+    return getVisibleCalendarEvents().filter(e => e.date === isoDate);
+}
+
+function renderCalendarFilters() {
+    if (!isAdminUser()) {
+        return '';
+    }
+    const orgs = Array.from(new Set(mockData.calendarEvents.map(e => e.organization).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b));
+    return `<div class="list-toolbar calendar-filters">${renderSelect('calendarOrgFilter', 'Organization', orgs, calendarView.organization)}</div>`;
 }
 
 function formatTime12h(hhmm) {
@@ -159,6 +180,7 @@ function renderEventsCalendarPage() {
                     <i data-lucide="plus"></i><span>Add Event</span>
                 </button>
             </div>
+            ${renderCalendarFilters()}
             ${renderCalendarLegend()}
             ${renderCalendarToolbar()}
             <div class="calendar-body">${body}</div>
@@ -196,17 +218,25 @@ function attachEventsCalendarListeners() {
         renderPage('events-calendar');
     });
     document.getElementById('calAddEventBtn').addEventListener('click', () => openEventForm());
+    document.getElementById('calendarOrgFilter')?.addEventListener('change', e => {
+        calendarView.organization = e.target.value;
+        renderPage('events-calendar');
+    });
 
     document.querySelectorAll('.cal-month-cell').forEach(cell => {
         cell.addEventListener('dblclick', () => openEventForm(null, cell.getAttribute('data-date')));
     });
 
-    document.querySelectorAll('[data-event-id]').forEach(el => {
+    // Double-clicking a day is a mouse shortcut only; "Add Event" is the
+    // keyboard path to the same form, so the day cells stay out of the Tab order.
+    const eventEls = document.querySelectorAll('[data-event-id]');
+    eventEls.forEach(el => {
         el.addEventListener('click', (e) => {
             e.stopPropagation();
             openEventDetails(Number(el.getAttribute('data-event-id')));
         });
     });
+    makeKeyboardActivatable(eventEls);
 }
 
 function openEventDetails(eventId) {
@@ -215,6 +245,7 @@ function openEventDetails(eventId) {
     const type = getCalendarEventType(evt.type);
     const statusLabel = evt.status === 'confirmed' ? 'Confirmed' : evt.status === 'pending' ? 'Pending' : 'Canceled';
     const rows = [
+        ['Organization', evt.organization || '—'],
         ['Type', type.label],
         ['Status', statusLabel],
         ['Date', evt.date],
@@ -222,12 +253,14 @@ function openEventDetails(eventId) {
         ['Location', evt.location || '—'],
         ['Description', evt.description || '—']
     ];
+    // The administrator does not edit an organization's events, only NMHP's own.
+    const canEdit = !isAdminUser() || evt.organization === getCalendarOwnOrganization();
     openFormModal(evt.title,
         `<dl class="detail-list">${rows.map(([k, v]) => `<div><dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')}</dl>`,
-        `<button class="modal-btn" id="eventEditBtn">Edit</button>
+        `${canEdit ? '<button class="modal-btn" id="eventEditBtn">Edit</button>' : ''}
          <button class="modal-btn primary" id="detailCloseBtn">Close</button>`);
     document.getElementById('detailCloseBtn').addEventListener('click', closeFormModal);
-    document.getElementById('eventEditBtn').addEventListener('click', () => openEventForm(evt.id));
+    document.getElementById('eventEditBtn')?.addEventListener('click', () => openEventForm(evt.id));
 }
 
 function openEventForm(id, presetDate) {
@@ -298,7 +331,7 @@ function openEventForm(id, presetDate) {
         if (editing) {
             Object.assign(e, data);
         } else {
-            mockData.calendarEvents.push({ id: mockData.calendarEventNextId++, ...data });
+            mockData.calendarEvents.push({ id: mockData.calendarEventNextId++, organization: getCalendarOwnOrganization(), ...data });
         }
         closeFormModal();
         showToast(editing ? 'Event updated successfully' : 'Event added successfully');

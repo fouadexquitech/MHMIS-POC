@@ -5,6 +5,11 @@
 
 const DEMO_STORAGE_KEY = 'mhis-demo-state';
 
+// Raise this whenever createRegistrationSeed() changes, so a browser that ran
+// an earlier version of the POC picks up the new sample registrations instead
+// of the ones it saved before (no manual "Reset demo data" needed).
+const DEMO_SEED_VERSION = 3;
+
 // Fully simulated — the POC has no backend, so a fixed code stands in for a
 // real emailed verification code during the registration wizard.
 const DEMO_VERIFICATION_CODE = '123456';
@@ -13,8 +18,9 @@ const DEMO_LOGIN_PASSWORD_HINT = 'demo1234';
 const REGISTRATION_STATUS = {
     incomplete: 'Incomplete',
     pendingReview: 'Pending Review',
+    changesRequested: 'Changes Requested',
     approved: 'Approved',
-    rejected: 'Rejected'
+    declined: 'Declined'
 };
 
 const ACCOUNT_ACCESS = {
@@ -37,6 +43,17 @@ const DEMO_ACCOUNTS = [
         registrationId: null
     },
     {
+        id: 'ngo-4ws-only',
+        role: 'ngo',
+        label: 'Existing NGO (4Ws only)',
+        organization: 'Northern Relief Association',
+        email: 'info@northernrelief.org',
+        loginIdentifier: 'info@northernrelief.org',
+        description: 'Approved organization that is not eligible for the Substance Use Platform.',
+        registrationId: null,
+        substanceUseEligible: false
+    },
+    {
         id: 'ngo-new',
         role: 'ngo',
         label: 'New NGO',
@@ -47,13 +64,15 @@ const DEMO_ACCOUNTS = [
         registrationId: 101
     },
     {
+        // The id is kept for saved demo sessions; the scenario is now
+        // "changes requested" (NMHP no longer rejects a registration).
         id: 'ngo-rejected',
         role: 'ngo',
-        label: 'NGO with a returned registration',
+        label: 'NGO with Changes Requested',
         organization: 'Bright Minds Foundation',
         email: 'info@brightmindsfoundation.org',
         loginIdentifier: 'info@brightmindsfoundation.org',
-        description: 'Registration returned by NMHP with a reason to address.',
+        description: 'NMHP asked the organization to update its registration.',
         registrationId: 102
     },
     {
@@ -63,11 +82,14 @@ const DEMO_ACCOUNTS = [
         organization: 'NMHP Administrator',
         email: 'admin@nmhp.gov.lb',
         loginIdentifier: 'nmhp.admin',
-        description: 'Reviews organization registrations and approves or rejects them.',
+        description: 'Reviews submitted profiles: approves them, requests changes or declines them.',
         registrationId: null
     }
 ];
 
+// Each registration carries the full organization profile: Organization
+// Details, focal persons, facilities and providers. Only Organization Details
+// is required to submit; the other tabs can be filled now or after approval.
 function createRegistrationSeed() {
     return [
         {
@@ -80,14 +102,19 @@ function createRegistrationSeed() {
             directorName: '',
             directorEmail: '',
             directorMobile: '',
-            sectors: '',
+            participatesInAors: false,
+            aors: [],
             website: '',
             linkedin: '',
             daleelMadani: '',
             focalPersons: [],
+            facilities: [],
+            providers: [],
             status: REGISTRATION_STATUS.incomplete,
             submittedDate: '',
-            rejectionReason: '',
+            reviewMessage: '',
+            reviewedDate: '',
+            previousRequest: null,
             accountAccess: ACCOUNT_ACCESS.active,
             role: 'Organization Admin'
         },
@@ -101,16 +128,23 @@ function createRegistrationSeed() {
             directorName: 'Rami Chidiac',
             directorEmail: 'r.chidiac@brightmindsfoundation.org',
             directorMobile: '+961 70 555 010',
-            sectors: 'Community Awareness',
+            participatesInAors: true,
+            aors: ['MHPSS Coordination Group (MHPSS CG)', 'Education'],
             website: 'https://www.brightmindsfoundation.org',
             linkedin: '',
             daleelMadani: '',
             focalPersons: [
                 { area: '4Ws', name: 'Lara Aoun', email: 'l.aoun@brightmindsfoundation.org', mobile: '+961 71 555 011' }
             ],
-            status: REGISTRATION_STATUS.rejected,
+            facilities: [
+                { id: 1, name: 'Bright Minds Youth Center', type: 'Community Center', governorate: 'Mount Lebanon', caza: 'Matn', locality: 'Jdeideh', contact: '+961 1 555 012' }
+            ],
+            providers: [],
+            status: REGISTRATION_STATUS.changesRequested,
             submittedDate: '18 Jan 2025',
-            rejectionReason: 'The Substance Use focal person is missing and the director contact details could not be verified. Please complete both and resubmit.',
+            reviewMessage: 'The Substance Use focal person is missing and the director contact details could not be verified. Please complete both and resubmit.',
+            reviewedDate: '20 Jan 2025',
+            previousRequest: null,
             accountAccess: ACCOUNT_ACCESS.active,
             role: 'Organization Admin'
         },
@@ -124,7 +158,8 @@ function createRegistrationSeed() {
             directorName: 'Dr. Hala Merhi',
             directorEmail: 'h.merhi@cedarspss.org',
             directorMobile: '+961 70 555 020',
-            sectors: 'Mental Health, Psychosocial Support',
+            participatesInAors: true,
+            aors: ['MHPSS Coordination Group (MHPSS CG)', 'Child Protection', 'Health'],
             website: 'https://www.cedarspss.org',
             linkedin: 'https://www.linkedin.com/company/cedars-pss',
             daleelMadani: 'https://daleel-madani.org/profile/cedars-pss',
@@ -132,9 +167,20 @@ function createRegistrationSeed() {
                 { area: '4Ws', name: 'Joseph Khoury', email: 'j.khoury@cedarspss.org', mobile: '+961 71 555 021' },
                 { area: 'Substance Use', name: 'Nada Zeidan', email: 'n.zeidan@cedarspss.org', mobile: '+961 71 555 022' }
             ],
+            facilities: [
+                { id: 1, name: 'Cedars Counselling Center', type: 'Community Center', governorate: 'North', caza: 'Tripoli', locality: 'El Mina', contact: '+961 6 555 023' }
+            ],
+            providers: [
+                { id: 1, name: 'Dr. Rami Khalil', type: 'Psychiatrist', facility: 'Cedars Counselling Center', phone: '+961 3 555 024', email: 'r.khalil@cedarspss.org' }
+            ],
             status: REGISTRATION_STATUS.pendingReview,
             submittedDate: '04 Feb 2025',
-            rejectionReason: '',
+            reviewMessage: '',
+            reviewedDate: '',
+            previousRequest: {
+                message: 'Please add the director mobile number and a Substance Use focal person.',
+                date: '28 Jan 2025'
+            },
             accountAccess: ACCOUNT_ACCESS.active,
             role: 'Organization Admin'
         },
@@ -144,11 +190,12 @@ function createRegistrationSeed() {
             acronym: 'BWI',
             phone: '+961 8 555 030',
             mobile: '+961 71 555 030',
-            email: 'info@bekaawellbeing.org',
+            email: 's.ghanem@bekaawellbeing.org',
             directorName: 'Samir Ghanem',
             directorEmail: 's.ghanem@bekaawellbeing.org',
             directorMobile: '+961 70 555 030',
-            sectors: 'Mental Health, Substance Use',
+            participatesInAors: true,
+            aors: ['MHPSS Coordination Group (MHPSS CG)', 'Health'],
             website: '',
             linkedin: '',
             daleelMadani: '',
@@ -156,9 +203,13 @@ function createRegistrationSeed() {
                 { area: '4Ws', name: 'Rita Salameh', email: 'r.salameh@bekaawellbeing.org', mobile: '+961 71 555 031' },
                 { area: 'Substance Use', name: 'Ali Daher', email: 'a.daher@bekaawellbeing.org', mobile: '+961 71 555 032' }
             ],
+            facilities: [],
+            providers: [],
             status: REGISTRATION_STATUS.pendingReview,
             submittedDate: '29 Jan 2025',
-            rejectionReason: '',
+            reviewMessage: '',
+            reviewedDate: '',
+            previousRequest: null,
             accountAccess: ACCOUNT_ACCESS.active,
             role: 'Organization Admin'
         },
@@ -172,7 +223,8 @@ function createRegistrationSeed() {
             directorName: 'Zeina Farhat',
             directorEmail: 'z.farhat@southerncare.org',
             directorMobile: '+961 70 555 040',
-            sectors: 'Mental Health',
+            participatesInAors: true,
+            aors: ['MHPSS Coordination Group (MHPSS CG)', 'Health'],
             website: 'https://www.southerncare.org',
             linkedin: 'https://www.linkedin.com/company/southern-care-network',
             daleelMadani: 'https://daleel-madani.org/profile/southern-care-network',
@@ -180,9 +232,20 @@ function createRegistrationSeed() {
                 { area: '4Ws', name: 'Hadi Sleiman', email: 'h.sleiman@southerncare.org', mobile: '+961 71 555 041' },
                 { area: 'Substance Use', name: 'Maya Chahine', email: 'm.chahine@southerncare.org', mobile: '+961 71 555 042' }
             ],
+            facilities: [
+                { id: 1, name: 'Saida Community Wellness Center', type: 'Community Center', governorate: 'South', caza: 'Saida', locality: 'Old Saida', contact: '+961 7 555 043' },
+                { id: 2, name: 'Tyre Primary Health Care Center', type: 'Primary Health Care Center', governorate: 'South', caza: 'Tyre', locality: 'Tyre', contact: '+961 7 555 044' }
+            ],
+            providers: [
+                { id: 1, name: 'Dr. Samir Jaber', type: 'Psychiatrist', facility: 'Tyre Primary Health Care Center', phone: '+961 3 555 045', email: 's.jaber@southerncare.org' },
+                { id: 2, name: 'Nadine Hoteit', type: 'Psychologist', facility: 'Saida Community Wellness Center', phone: '+961 3 555 046', email: 'n.hoteit@southerncare.org' },
+                { id: 3, name: 'Ali Mroueh', type: 'Social Worker', facility: 'Saida Community Wellness Center', phone: '+961 3 555 047', email: 'a.mroueh@southerncare.org' }
+            ],
             status: REGISTRATION_STATUS.approved,
             submittedDate: '11 Dec 2024',
-            rejectionReason: '',
+            reviewMessage: '',
+            reviewedDate: '16 Dec 2024',
+            previousRequest: null,
             accountAccess: ACCOUNT_ACCESS.active,
             role: 'Organization Admin'
         },
@@ -196,7 +259,8 @@ function createRegistrationSeed() {
             directorName: 'Georges Abou Jaoude',
             directorEmail: 'g.aboujaoude@coastalrecovery.org',
             directorMobile: '+961 70 555 050',
-            sectors: 'Substance Use',
+            participatesInAors: false,
+            aors: [],
             website: '',
             linkedin: '',
             daleelMadani: '',
@@ -204,9 +268,18 @@ function createRegistrationSeed() {
                 { area: '4Ws', name: 'Sandy Rizk', email: 's.rizk@coastalrecovery.org', mobile: '+961 71 555 051' },
                 { area: 'Substance Use', name: 'Fadi Nehme', email: 'f.nehme@coastalrecovery.org', mobile: '+961 71 555 052' }
             ],
+            facilities: [
+                { id: 1, name: 'Jounieh Recovery Center', type: 'Community Center', governorate: 'Mount Lebanon', caza: 'Kesrouan', locality: 'Jounieh', contact: '+961 9 555 053' }
+            ],
+            providers: [
+                { id: 1, name: 'Dr. Carla Khoury', type: 'Psychiatrist', facility: 'Jounieh Recovery Center', phone: '+961 3 555 054', email: 'c.khoury@coastalrecovery.org' },
+                { id: 2, name: 'Tony Saade', type: 'Counselor', facility: 'Jounieh Recovery Center', phone: '+961 3 555 055', email: 't.saade@coastalrecovery.org' }
+            ],
             status: REGISTRATION_STATUS.approved,
             submittedDate: '02 Oct 2024',
-            rejectionReason: '',
+            reviewMessage: '',
+            reviewedDate: '07 Oct 2024',
+            previousRequest: null,
             accountAccess: ACCOUNT_ACCESS.inactive,
             role: 'Organization Admin'
         }
@@ -214,6 +287,7 @@ function createRegistrationSeed() {
 }
 
 let demoState = {
+    seedVersion: DEMO_SEED_VERSION,
     accountId: null,
     registrations: createRegistrationSeed()
 };
@@ -231,11 +305,15 @@ function loadDemoState() {
             return;
         }
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.registrations) && parsed.registrations.length) {
+        const sameSeed = parsed && parsed.seedVersion === DEMO_SEED_VERSION;
+        if (sameSeed && Array.isArray(parsed.registrations) && parsed.registrations.length) {
             demoState.registrations = parsed.registrations;
         }
         if (parsed && parsed.accountId && getDemoAccount(parsed.accountId)) {
             demoState.accountId = parsed.accountId;
+        }
+        if (!sameSeed) {
+            saveDemoState();
         }
     } catch (err) {
         // A corrupt or unavailable storage entry simply starts the demo from scratch.
@@ -253,7 +331,7 @@ function saveDemoState() {
 }
 
 function resetDemoState() {
-    demoState = { accountId: null, registrations: createRegistrationSeed() };
+    demoState = { seedVersion: DEMO_SEED_VERSION, accountId: null, registrations: createRegistrationSeed() };
     try {
         window.localStorage.removeItem(DEMO_STORAGE_KEY);
     } catch (err) {
@@ -327,6 +405,12 @@ function getCurrentRegistrationStatus() {
     return registration ? registration.status : REGISTRATION_STATUS.approved;
 }
 
+// Only eligible organizations see the Substance Use Platform.
+function isSubstanceUseEligible() {
+    const account = getCurrentAccount();
+    return !!account && account.substanceUseEligible !== false;
+}
+
 function isCurrentNgoApproved() {
     return getCurrentRegistrationStatus() === REGISTRATION_STATUS.approved;
 }
@@ -345,32 +429,53 @@ function submitRegistrationForReview(id) {
     if (!registration) {
         return null;
     }
+    // A resubmission keeps NMHP's last request, so the reviewer sees what was asked.
+    if (registration.status === REGISTRATION_STATUS.changesRequested && registration.reviewMessage) {
+        registration.previousRequest = { message: registration.reviewMessage, date: registration.reviewedDate };
+    }
     registration.status = REGISTRATION_STATUS.pendingReview;
-    registration.rejectionReason = '';
+    registration.reviewMessage = '';
+    registration.reviewedDate = '';
     registration.submittedDate = formatDemoDate(new Date());
     saveDemoState();
     return registration;
 }
 
+// The three review decisions. NMHP emails each decision to the sign-in email
+// and the focal persons (simulated) and the organization gets a notification.
 function approveRegistration(id) {
     const registration = getRegistrationById(id);
     if (!registration) {
         return null;
     }
     registration.status = REGISTRATION_STATUS.approved;
-    registration.rejectionReason = '';
+    registration.reviewMessage = '';
+    registration.reviewedDate = formatDemoDate(new Date());
     registration.accountAccess = ACCOUNT_ACCESS.active;
     saveDemoState();
     return registration;
 }
 
-function rejectRegistration(id, reason) {
+function requestRegistrationChanges(id, message) {
     const registration = getRegistrationById(id);
     if (!registration) {
         return null;
     }
-    registration.status = REGISTRATION_STATUS.rejected;
-    registration.rejectionReason = reason;
+    registration.status = REGISTRATION_STATUS.changesRequested;
+    registration.reviewMessage = message;
+    registration.reviewedDate = formatDemoDate(new Date());
+    saveDemoState();
+    return registration;
+}
+
+function declineRegistration(id, reason) {
+    const registration = getRegistrationById(id);
+    if (!registration) {
+        return null;
+    }
+    registration.status = REGISTRATION_STATUS.declined;
+    registration.reviewMessage = reason;
+    registration.reviewedDate = formatDemoDate(new Date());
     saveDemoState();
     return registration;
 }

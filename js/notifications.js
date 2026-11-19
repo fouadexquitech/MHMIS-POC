@@ -39,12 +39,12 @@ function getAdminNotifications() {
         {
             id: 1001,
             type: 'action',
-            title: 'Organization Registrations Pending Review',
-            preview: `${pendingRegs} organization registration${pendingRegs === 1 ? '' : 's'} awaiting your review.`,
-            fullContent: `${pendingRegs} organization registration${pendingRegs === 1 ? '' : 's'} currently awaiting your review. Open Organization Registrations to approve or reject them.`,
+            title: 'Submitted Profiles Waiting for Review',
+            preview: `${pendingRegs} organization profile${pendingRegs === 1 ? '' : 's'} submitted for review.`,
+            fullContent: `${pendingRegs} organization profile${pendingRegs === 1 ? '' : 's'} currently waiting for your review. Open Submitted Profiles to approve them or request changes.`,
             timestamp: 'Updated just now',
             unread: adminNotificationState[1001].unread,
-            action: 'Review Registrations'
+            action: 'Review Submitted Profiles'
         },
         {
             id: 1002,
@@ -54,7 +54,7 @@ function getAdminNotifications() {
             fullContent: `${pendingEvents} submitted event${pendingEvents === 1 ? '' : 's'} currently awaiting your review.`,
             timestamp: 'Updated just now',
             unread: adminNotificationState[1002].unread,
-            action: 'Review Events'
+            action: 'Review Submitted Events'
         },
         {
             id: 1003,
@@ -104,9 +104,11 @@ function renderNotificationList() {
         </div>`;
     }).join('');
 
-    document.querySelectorAll('.notification-item').forEach(item => {
+    const items = document.querySelectorAll('.notification-item');
+    items.forEach(item => {
         item.addEventListener('click', handleNotificationClick);
     });
+    makeKeyboardActivatable(items);
     if (window.lucide) window.lucide.createIcons();
 }
 
@@ -134,18 +136,36 @@ function showNotificationDetail(notification) {
     
     if (notification.action) {
         modalFooter.innerHTML = `<button class="modal-btn primary">${escapeHtml(notification.action)}</button>`;
+        if (notification.resourceTopic) {
+            // Opens the matching Resources & Help page (used by What's New).
+            modalFooter.querySelector('button').addEventListener('click', () => {
+                closeDetailModal();
+                resourcesHelpView.mode = notification.resourceTopic;
+                navigateTo('resources-help');
+            });
+        }
     } else {
         modalFooter.innerHTML = '';
     }
 
     overlay.style.display = 'flex';
     overlay.classList.add('show');
+    const primary = modalFooter.querySelector('button');
+    (primary || document.getElementById('closeModal')).focus();
 }
 
 function closeDetailModal() {
     const overlay = document.getElementById('notificationDetailOverlay');
+    const wasOpen = overlay.style.display !== 'none';
     overlay.style.display = 'none';
     overlay.classList.remove('show');
+    // The list item that opened it was re-rendered, so return to the panel's
+    // first item (or the bell when the panel has closed).
+    if (wasOpen) {
+        const panelOpen = document.getElementById('notificationModal').style.display === 'block';
+        const firstItem = panelOpen && document.querySelector('.notification-item');
+        (firstItem || document.getElementById('notificationBell')).focus();
+    }
 }
 
 function handleModalBackdropClick(e) {
@@ -167,7 +187,9 @@ function updateNotificationBadge() {
     const badge = document.getElementById('notificationBadge');
     const unreadCount = getVisibleNotifications().filter(n => n.unread).length;
     appState.unreadCount = unreadCount;
-    
+    document.getElementById('notificationBell').setAttribute('aria-label',
+        unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications');
+
     if (unreadCount > 0) {
         badge.textContent = unreadCount;
         badge.style.display = 'flex';

@@ -120,7 +120,7 @@ function renderEventReviewsPage() {
     return `
         <div class="page">
             <div class="page-header">
-                <h1 class="page-title">Event Reviews</h1>
+                <h1 class="page-title">Submitted Events</h1>
                 <button type="button" class="btn btn-secondary" id="exportEventReviewsBtn"><i data-lucide="download"></i><span>Export to Excel</span></button>
             </div>
             <div class="list-toolbar">
@@ -211,8 +211,7 @@ function renderEventReviewDetailPage() {
 
     return `
         <div class="page">
-            <button type="button" class="link-back" id="eventReviewBackBtn"><i data-lucide="arrow-left"></i> Back to Event Reviews</button>
-            <div class="page-header">
+            <div class="page-header page-header-start">
                 <h1 class="page-title">${escapeHtml(r.eventTitle)}</h1>
                 ${renderEventReviewStatusPill(r.status)}
             </div>
@@ -234,7 +233,6 @@ function renderEventReviewDetailPage() {
 }
 
 function attachEventReviewDetailListeners() {
-    document.getElementById('eventReviewBackBtn')?.addEventListener('click', () => navigateTo('event-reviews'));
 
     document.getElementById('approveEventBtn')?.addEventListener('click', () => {
         const r = approveEventReview(reviewsView.selectedEventReviewId);
@@ -371,7 +369,7 @@ function renderFacilityDuplicatesPage() {
     return `
         <div class="page">
             <div class="page-header">
-                <h1 class="page-title">Potential Duplicate Facilities</h1>
+                <h1 class="page-title">Possible Duplicate Facilities</h1>
             </div>
             <div class="list-toolbar">
                 <div class="search-group">
@@ -460,8 +458,7 @@ function renderFacilityDuplicateReviewPage() {
 
     return `
         <div class="page">
-            <button type="button" class="link-back" id="duplicateBackBtn"><i data-lucide="arrow-left"></i> Back to Potential Duplicate Facilities</button>
-            <div class="page-header">
+            <div class="page-header page-header-start">
                 <h1 class="page-title">${escapeHtml(d.newFacility.name)}</h1>
                 ${renderFacilityDuplicateStatusPill(d.status)}
             </div>
@@ -487,7 +484,6 @@ function renderFacilityDuplicateReviewPage() {
 }
 
 function attachFacilityDuplicateReviewListeners() {
-    document.getElementById('duplicateBackBtn')?.addEventListener('click', () => navigateTo('facility-duplicates'));
 
     document.querySelectorAll('[data-link-candidate]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -581,7 +577,7 @@ function renderPendingCustomValuesPage() {
     return `
         <div class="page">
             <div class="page-header">
-                <h1 class="page-title">Pending Custom Values</h1>
+                <h1 class="page-title">Submitted Custom Values</h1>
             </div>
             <div class="list-toolbar">
                 <div class="search-group">

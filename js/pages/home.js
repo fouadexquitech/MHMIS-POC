@@ -1,28 +1,49 @@
-// Home Page
+// ===== MHIS Home (approved NGO) =====
+// The same page every time an NGO signs in: a welcome line, one card per
+// reporting platform saying what the platform is for, then the shared
+// announcements and events. The platform work itself (figures, Add Activity,
+// Add Survey) is inside each platform, on its Overview page (platforms.js).
+
+const PLATFORM_CARD_POINTS = {
+    '4ws': [
+        'Report the activities your organization implements',
+        'Link them to your facilities and locations',
+        'Follow your figures in the 4Ws Dashboard'
+    ],
+    'su': [
+        'Fill your yearly substance use surveys',
+        'Save drafts and submit them when complete',
+        'See what is submitted and what is still due'
+    ]
+};
+
+function renderPlatformCard(key) {
+    const platform = REPORTING_PLATFORMS[key];
+    return `
+        <section class="platform-card" aria-labelledby="platform-title-${key}">
+            <div class="platform-card-head">
+                <div class="platform-card-icon"><i data-lucide="${platform.icon}"></i></div>
+                <div class="platform-card-heading">
+                    <h2 class="platform-card-title" id="platform-title-${key}">${escapeHtml(platform.name)}</h2>
+                    <p class="platform-card-tagline">${escapeHtml(platform.tagline)}</p>
+                </div>
+            </div>
+            <ul class="platform-card-points">
+                ${PLATFORM_CARD_POINTS[key].map(point => `<li>${escapeHtml(point)}</li>`).join('')}
+            </ul>
+            <div class="platform-card-footer">
+                <button type="button" class="btn-link" data-platform-about="${key}">Read More</button>
+                <button type="button" class="btn btn-primary" data-platform-open="${key}">
+                    <span>Open ${escapeHtml(platform.name)}</span><i data-lucide="arrow-right"></i>
+                </button>
+            </div>
+        </section>`;
+}
+
 function renderHomePage() {
-    const data = mockData;
-    const needsAttention = data.needsAttention;
-    const announcements = data.announcements;
-    const events = data.upcomingEvents;
+    const platforms = getAvailablePlatforms();
 
-    let needsAttentionHTML = '';
-    if (needsAttention.length === 0) {
-        needsAttentionHTML = `
-            <div class="needs-attention-empty">
-                <div class="needs-attention-empty-icon">✓</div>
-                <p>No items requiring your attention</p>
-            </div>
-        `;
-    } else {
-        needsAttentionHTML = needsAttention.map(item => `
-            <div class="attention-item">
-                <div class="attention-item-title">${escapeHtml(item.title)}</div>
-                <div class="attention-item-description">${escapeHtml(item.description)}</div>
-            </div>
-        `).join('');
-    }
-
-    const announcementsHTML = announcements.map(item => `
+    const announcementsHTML = mockData.announcements.map(item => `
         <div class="announcement-item">
             <div class="announcement-title">${escapeHtml(item.title)}</div>
             <div class="announcement-content">${escapeHtml(item.content)}</div>
@@ -30,7 +51,7 @@ function renderHomePage() {
         </div>
     `).join('');
 
-    const eventsHTML = events.map(item => `
+    const eventsHTML = mockData.upcomingEvents.map(item => `
         <div class="event-item">
             <div class="event-date">
                 <div class="event-date-day">${item.day}</div>
@@ -46,27 +67,21 @@ function renderHomePage() {
     return `
         <div class="home-page">
             <div class="welcome-section">
-                <h1 class="welcome-heading">Welcome, ${escapeHtml(data.organization.name)}</h1>
+                <h1 class="welcome-heading">Welcome, ${escapeHtml(getCurrentOrganizationName())}</h1>
             </div>
 
-            <div class="action-buttons">
-                <button class="btn btn-primary" id="addActivityBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    <span>Add Activity</span>
-                </button>
-                <button class="btn btn-secondary" id="viewDashboardBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M13 17V9"></path><path d="M18 17V5"></path><path d="M8 17v-3"></path></svg>
-                    <span>View Dashboard</span>
-                </button>
+            <h2 class="home-section-title">Reporting Platforms</h2>
+            <div class="home-platforms${platforms.length === 1 ? ' single' : ''}">
+                ${platforms.map(renderPlatformCard).join('')}
             </div>
 
             <div class="home-row">
                 <div class="section-card">
                     <div class="section-header">
-                        <h3>Needs Attention</h3>
+                        <h3>Recent Announcements</h3>
                     </div>
                     <div class="section-content">
-                        ${needsAttentionHTML}
+                        ${announcementsHTML}
                     </div>
                 </div>
 
@@ -80,58 +95,35 @@ function renderHomePage() {
                     </div>
                 </button>
             </div>
-
-            <div class="home-row">
-                <div class="section-card">
-                    <div class="section-header">
-                        <h3>Recent Announcements</h3>
-                    </div>
-                    <div class="section-content">
-                        ${announcementsHTML}
-                    </div>
-                </div>
-
-                <div class="section-card">
-                    <div class="section-header">
-                        <h3>Overview</h3>
-                    </div>
-                    <div class="section-content">
-                        <div class="home-stat-grid">
-                            <div class="home-stat-tile">
-                                <div class="home-stat-value">${data.organization.activities}</div>
-                                <div class="home-stat-label">Activities</div>
-                            </div>
-                            <div class="home-stat-tile">
-                                <div class="home-stat-value">${data.organization.facilities}</div>
-                                <div class="home-stat-label">Facilities</div>
-                            </div>
-                            <div class="home-stat-tile">
-                                <div class="home-stat-value">${data.organization.providers}</div>
-                                <div class="home-stat-label">Providers</div>
-                            </div>
-                            <div class="home-stat-tile">
-                                <div class="home-stat-value">${mockData.surveys.length}</div>
-                                <div class="home-stat-label">Surveys</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     `;
 }
 
 function attachHomePageListeners() {
-    document.getElementById('addActivityBtn')?.addEventListener('click', () => {
-        activitiesView.mode = 'discovery';
-        activitiesView.discoveryQuery = '';
-        navigateTo('activities');
+    document.querySelectorAll('[data-platform-open]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            navigateTo(REPORTING_PLATFORMS[btn.getAttribute('data-platform-open')].overviewPage);
+        });
     });
-    document.getElementById('viewDashboardBtn')?.addEventListener('click', () => {
-        document.querySelector('[data-page="my-dashboard"]').click();
+    document.querySelectorAll('[data-platform-about]').forEach(btn => {
+        btn.addEventListener('click', () => openPlatformAboutDialog(btn.getAttribute('data-platform-about')));
     });
     document.getElementById('upcomingEventsCard')?.addEventListener('click', () => {
         navigateTo('events-calendar');
     });
 }
 
+// Read More: the platform's About text (the same text as its Resources & Help
+// topic), shown over Home so the user can decide before opening the platform.
+function openPlatformAboutDialog(key) {
+    const platform = REPORTING_PLATFORMS[key];
+    openFormModal(`About the ${platform.name}`,
+        `<p class="about-dialog-text">${escapeHtml(getAboutText(platform.aboutTopic))}</p>`,
+        `<button type="button" class="modal-btn" id="platformAboutCloseBtn">Close</button>
+         <button type="button" class="modal-btn primary" id="platformAboutOpenBtn">Open ${escapeHtml(platform.name)}</button>`);
+    document.getElementById('platformAboutCloseBtn').addEventListener('click', closeFormModal);
+    document.getElementById('platformAboutOpenBtn').addEventListener('click', () => {
+        closeFormModal();
+        navigateTo(platform.overviewPage);
+    });
+}

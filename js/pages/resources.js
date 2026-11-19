@@ -1,16 +1,50 @@
 // ===== Resources & Help =====
-const RESOURCE_TOPICS = [
-    { key: 'activity-catalog', label: 'Activity Catalog', icon: 'book-open', description: 'Browse activity codes, names, and definitions.' },
-    { key: 'glossary', label: 'Glossary of Terms', icon: 'book-text', description: 'Definitions of common MHIS terms and acronyms.' },
-    { key: 'about-4ws', label: 'About 4Ws', icon: 'info', description: 'Learn about the Who, What, Where, When framework.' },
-    { key: 'about-mhis', label: 'About MHIS', icon: 'info', description: 'Learn about the Mental Health Information System.' },
-    { key: 'about-nmhp', label: 'About NMHP', icon: 'info', description: 'Learn about the National Mental Health Programme.' },
-    { key: 'whats-new', label: 'What\u2019s New', icon: 'sparkles', description: 'Recent updates and improvements to MHIS.' },
-    { key: 'annual-reports', label: 'Annual Reports', icon: 'file-text', description: 'Published annual reports.' }
+// One Resources & Help page in every area. It shows the topics of the area
+// the user is in: General in MHIS, the platform's own topics inside the 4Ws
+// or the Substance Use Platform.
+const NMHP_RESOURCES_URL = 'https://resources.nmhp-lb.com/';
+
+const RESOURCE_GROUPS = [
+    { key: 'general', label: 'General' },
+    { key: '4ws', label: '4Ws Platform' },
+    { key: 'su', label: 'Substance Use Platform' }
 ];
+
+const RESOURCE_TOPICS = [
+    { key: 'about-mhis', group: 'general', label: 'About MHIS', icon: 'info', description: 'Learn about the Mental Health Information System.' },
+    { key: 'whats-new', group: 'general', label: 'What\u2019s New', icon: 'sparkles', description: 'Recent updates and improvements to MHIS.' },
+    { key: 'nmhp-resources', group: 'general', label: 'NMHP Resources Page', icon: 'external-link', description: 'Opens the NMHP resources website in a new browser tab.', href: NMHP_RESOURCES_URL },
+    { key: 'activity-catalog', group: '4ws', label: 'List of 4Ws Sub-Activities', icon: 'book-open', description: 'Browse sub-activity codes, names, and definitions.' },
+    { key: 'about-4ws', group: '4ws', label: 'About the 4Ws Platform', icon: 'info', description: 'Learn about the Who, What, Where, When framework.' },
+    { key: 'annual-reports-4ws', group: '4ws', label: 'Annual Reports', icon: 'file-text', description: 'Published 4Ws annual reports.' },
+    { key: 'su-sub-activities', group: 'su', label: 'List of Substance Use Sub-Activities', icon: 'book-open', description: 'Browse the substance use sub-activities and their definitions.' },
+    { key: 'about-su', group: 'su', label: 'About the Substance Use Platform', icon: 'info', description: 'Learn about substance use data collection.' },
+    { key: 'annual-reports-su', group: 'su', label: 'Annual Reports', icon: 'file-text', description: 'Published Substance Use annual reports.' }
+];
+
+// The About texts, also shown by Read More on the MHIS Home platform cards.
+const RESOURCE_ABOUT_TEXT = {
+    'about-mhis': 'The Mental Health Information System (MHIS) is the platform NGOs and administrators use to register activities, facilities, providers, and surveys in support of the national mental health response. It centralizes reporting to support coordination and evidence-based planning.',
+    'about-4ws': 'The 4Ws (Who, What, Where, When) framework is used to map mental health and psychosocial support activities across Lebanon. It helps NGOs and the National Mental Health Programme understand who is doing what, where, and when, avoiding duplication and identifying gaps in coverage.'
+};
+
+function getAboutText(topicKey) {
+    return topicKey === 'about-su' ? mockData.surveysIntro.full : RESOURCE_ABOUT_TEXT[topicKey] || '';
+}
 
 function getResourceTopic(key) {
     return RESOURCE_TOPICS.find(t => t.key === key);
+}
+
+// MHIS shows the general material; inside a platform, only that platform's
+// topics. An organization that is not approved yet only sees the general
+// material.
+function getVisibleResourceGroups() {
+    if (isAdminUser()) {
+        return RESOURCE_GROUPS;
+    }
+    const platform = getCurrentPlatform();
+    return RESOURCE_GROUPS.filter(g => g.key === (platform ? platform.key : 'general'));
 }
 
 function renderResourcesHelpPage() {
@@ -21,12 +55,24 @@ function renderResourcesHelpPage() {
 }
 
 function renderResourcesLandingPage() {
-    const cardsHTML = RESOURCE_TOPICS.map(t => `
-        <button type="button" class="resource-card" data-topic="${t.key}">
+    const cardBody = t => `
             <div class="resource-card-icon"><i data-lucide="${t.icon}"></i></div>
             <div class="resource-card-label">${escapeHtml(t.label)}</div>
-            <div class="resource-card-description">${escapeHtml(t.description)}</div>
-        </button>`).join('');
+            <div class="resource-card-description">${escapeHtml(t.description)}</div>`;
+
+    const groupsHTML = getVisibleResourceGroups().map(group => `
+        <div class="section-card">
+            <div class="section-header">
+                <h3>${escapeHtml(group.label)}</h3>
+            </div>
+            <div class="section-content">
+                <div class="resource-card-grid">
+                    ${RESOURCE_TOPICS.filter(t => t.group === group.key).map(t => t.href
+                        ? `<a class="resource-card" href="${escapeHtml(t.href)}" target="_blank" rel="noopener">${cardBody(t)}</a>`
+                        : `<button type="button" class="resource-card" data-topic="${t.key}">${cardBody(t)}</button>`).join('')}
+                </div>
+            </div>
+        </div>`).join('');
 
     return `
         <div class="page">
@@ -36,15 +82,12 @@ function renderResourcesLandingPage() {
                     <p class="page-lead">Reference material, definitions, and support information.</p>
                 </div>
             </div>
-            <div class="resource-card-grid">
-                ${cardsHTML}
-            </div>
+            ${groupsHTML}
         </div>`;
 }
 
 function renderResourceTopicPage(topicKey) {
     const topic = getResourceTopic(topicKey);
-    const backLinkHTML = `<button type="button" class="link-back" id="resourcesBackBtn"><i data-lucide="arrow-left"></i> Back to Resources & Help</button>`;
 
     let bodyHTML = '';
     switch (topicKey) {
@@ -55,19 +98,25 @@ function renderResourceTopicPage(topicKey) {
             bodyHTML = renderGlossaryResource();
             break;
         case 'about-4ws':
-            bodyHTML = renderStaticResource('About 4Ws', 'The 4Ws (Who, What, Where, When) framework is used to map mental health and psychosocial support activities across Lebanon. It helps NGOs and the National Mental Health Programme understand who is doing what, where, and when, avoiding duplication and identifying gaps in coverage.');
+            bodyHTML = renderStaticResource('About the 4Ws Platform', getAboutText('about-4ws'));
             break;
         case 'about-mhis':
-            bodyHTML = renderStaticResource('About MHIS', 'The Mental Health Information System (MHIS) is the platform NGOs and administrators use to register activities, facilities, providers, and surveys in support of the national mental health response. It centralizes reporting to support coordination and evidence-based planning.');
-            break;
-        case 'about-nmhp':
-            bodyHTML = renderStaticResource('About NMHP', 'The National Mental Health Programme (NMHP) is the government body within the Ministry of Public Health responsible for overseeing mental health policy, coordination, and services in Lebanon.');
+            bodyHTML = renderStaticResource('About MHIS', getAboutText('about-mhis'));
             break;
         case 'whats-new':
             bodyHTML = renderWhatsNewResource();
             break;
-        case 'annual-reports':
-            bodyHTML = renderAnnualReportsResource();
+        case 'annual-reports-4ws':
+            bodyHTML = renderAnnualReportsResource('4Ws Annual Reports', mockData.resources.annualReports4ws);
+            break;
+        case 'su-sub-activities':
+            bodyHTML = renderSubstanceUseSubActivitiesResource();
+            break;
+        case 'about-su':
+            bodyHTML = renderStaticResource('About the Substance Use Platform', getAboutText('about-su'));
+            break;
+        case 'annual-reports-su':
+            bodyHTML = renderAnnualReportsResource('Substance Use Annual Reports', mockData.resources.annualReportsSu);
             break;
         default:
             bodyHTML = renderStaticResource(topic ? topic.label : 'Resource', 'Content coming soon.');
@@ -75,7 +124,6 @@ function renderResourceTopicPage(topicKey) {
 
     return `
         <div class="page">
-            ${backLinkHTML}
             ${bodyHTML}
         </div>`;
 }
@@ -135,8 +183,30 @@ function renderWhatsNewResource() {
         </div>`;
 }
 
-function renderAnnualReportsResource() {
-    const rowsHTML = mockData.resources.annualReports.map(report => `
+function renderSubstanceUseSubActivitiesResource() {
+    const cardsHTML = mockData.resources.suSubActivities.map(item => `
+        <div class="catalog-card">
+            <div>
+                <div class="catalog-code">${escapeHtml(item.code)} &middot; ${escapeHtml(item.category)}</div>
+                <div class="catalog-name">${escapeHtml(item.name)}</div>
+                <div class="catalog-def">${escapeHtml(item.definition)}</div>
+            </div>
+        </div>`).join('');
+
+    return `
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">List of Substance Use Sub-Activities</h1>
+                <p class="page-lead">The substance use sub-activities covered by the surveys, with their definitions.</p>
+            </div>
+        </div>
+        <div class="discovery-results">
+            ${cardsHTML}
+        </div>`;
+}
+
+function renderAnnualReportsResource(title, reports) {
+    const rowsHTML = reports.map(report => `
         <div class="event-item">
             <div class="event-details">
                 <div class="event-title">${escapeHtml(report.title)}</div>
@@ -151,7 +221,7 @@ function renderAnnualReportsResource() {
     return `
         <div class="page-header">
             <div>
-                <h1 class="page-title">Annual Reports</h1>
+                <h1 class="page-title">${escapeHtml(title)}</h1>
             </div>
         </div>
         <div class="section-card">
@@ -258,8 +328,8 @@ function renderActivityCatalogResource() {
     return `
         <div class="page-header">
             <div>
-                <h1 class="page-title">Activity Catalog</h1>
-                <p class="page-lead">Browse the full list of reportable activities and their definitions.</p>
+                <h1 class="page-title">List of 4Ws Sub-Activities</h1>
+                <p class="page-lead">Browse the full list of reportable sub-activities and their definitions.</p>
             </div>
         </div>
         <div class="discovery-search">
@@ -276,7 +346,7 @@ function renderActivityCatalogResource() {
 
 function attachResourcesHelpListeners() {
     if (resourcesHelpView.mode === 'landing') {
-        document.querySelectorAll('.resource-card').forEach(card => {
+        document.querySelectorAll('.resource-card[data-topic]').forEach(card => {
             card.addEventListener('click', () => {
                 resourcesHelpView.mode = card.getAttribute('data-topic');
                 renderPage('resources-help');
@@ -284,11 +354,6 @@ function attachResourcesHelpListeners() {
         });
         return;
     }
-
-    document.getElementById('resourcesBackBtn')?.addEventListener('click', () => {
-        resourcesHelpView.mode = 'landing';
-        renderPage('resources-help');
-    });
 
     if (resourcesHelpView.mode === 'activity-catalog') {
         const input = document.getElementById('resourceCatalogSearch');

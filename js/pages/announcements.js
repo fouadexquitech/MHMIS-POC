@@ -408,8 +408,9 @@ function sendAnnouncement(groupId, title, message) {
         title,
         message,
         sentDate: new Date().toISOString().slice(0, 10),
-        sentBy: 'NMHP Administrator',
-        recipients
+        recipients,
+        // Nobody has opened a new announcement yet.
+        readBy: []
     });
     return recipients.length;
 }
@@ -438,9 +439,12 @@ function renderAnnouncementHistoryPage() {
                 </td>
                 <td>${escapeHtml(l.sentDate)}</td>
                 <td>${l.recipients.length}</td>
-                <td>${escapeHtml(l.sentBy)}</td>
+                <td class="actions-cell">${l.readBy.length} of ${l.recipients.length}</td>
+                <td class="actions-cell">
+                    <button type="button" class="icon-action" title="View Recipients" aria-label="View who has read ${escapeHtml(l.title)}" data-announcement-readers="${l.id}"><i data-lucide="eye"></i></button>
+                </td>
             </tr>`).join('')
-        : '<tr><td colspan="5" class="empty-cell">No announcements have been sent yet.</td></tr>';
+        : '<tr><td colspan="6" class="empty-cell">No announcements have been sent yet.</td></tr>';
 
     return `
         <div class="page">
@@ -457,7 +461,7 @@ function renderAnnouncementHistoryPage() {
             <div class="result-count">${logs.length} announcement${logs.length === 1 ? '' : 's'}</div>
             <table class="data-table">
                 <thead>
-                    <tr><th>Group</th><th>Announcement</th><th>Sent Date</th><th>Recipients</th><th>Sent By</th></tr>
+                    <tr><th>Group</th><th>Announcement</th><th>Sent Date</th><th>Recipients</th><th>Read</th><th>Actions</th></tr>
                 </thead>
                 <tbody>${rowsHTML}</tbody>
             </table>
@@ -475,4 +479,36 @@ function attachAnnouncementHistoryListeners() {
         announcementsView.historyGroupFilter = e.target.value;
         renderPage('announcement-history');
     });
+
+    document.querySelectorAll('[data-announcement-readers]').forEach(btn => {
+        btn.addEventListener('click', () => openAnnouncementReadersModal(Number(btn.getAttribute('data-announcement-readers'))));
+    });
+}
+
+// Who, within the group the announcement was sent to, has read it.
+function openAnnouncementReadersModal(logId) {
+    const log = mockData.announcementLogs.find(l => l.id === logId);
+    if (!log) {
+        return;
+    }
+    const rowsHTML = log.recipients.length
+        ? log.recipients.map(name => {
+            const read = log.readBy.includes(name);
+            return `
+            <tr>
+                <td>${escapeHtml(name)}</td>
+                <td><span class="reg-status reg-status-${read ? 'approved' : 'incomplete'}"><i data-lucide="${read ? 'circle-check' : 'circle'}"></i><span>${read ? 'Read' : 'Not read yet'}</span></span></td>
+            </tr>`;
+        }).join('')
+        : '<tr><td colspan="2" class="empty-cell">This announcement had no recipients.</td></tr>';
+
+    openFormModal(log.title, `
+        <p class="status-text">Sent to ${escapeHtml(log.groupName)} on ${escapeHtml(log.sentDate)}. ${log.readBy.length} of ${log.recipients.length} recipient${log.recipients.length === 1 ? '' : 's'} have read it.</p>
+        <table class="data-table">
+            <thead><tr><th>Recipient</th><th>Status</th></tr></thead>
+            <tbody>${rowsHTML}</tbody>
+        </table>`,
+        `<button class="modal-btn" id="announcementReadersCloseBtn">Close</button>`);
+    document.getElementById('announcementReadersCloseBtn').addEventListener('click', closeFormModal);
+    refreshLucideIcons();
 }

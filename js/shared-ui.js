@@ -1,15 +1,209 @@
+// ===== Keyboard access for click-only elements =====
+// Some cards, tiles and list rows are styled <div>s with a click handler.
+// This makes them reachable with Tab and operable with Enter/Space, without
+// changing how they look. Call it after rendering, on the same elements that
+// get the click listener.
+function makeKeyboardActivatable(elements) {
+    elements.forEach(el => {
+        if (el.dataset.kbActivatable) return;
+        el.dataset.kbActivatable = 'true';
+        el.setAttribute('tabindex', '0');
+        el.setAttribute('role', 'button');
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                el.click();
+            }
+        });
+    });
+}
+
+// ===== Dialog focus =====
+// Where focus was before a dialog opened, so closing it can send focus back.
+const dialogReturnFocus = {};
+
+function rememberFocusFor(dialogId) {
+    dialogReturnFocus[dialogId] = document.activeElement;
+}
+
+function restoreFocusFor(dialogId) {
+    const el = dialogReturnFocus[dialogId];
+    delete dialogReturnFocus[dialogId];
+    if (el && document.contains(el) && typeof el.focus === 'function') {
+        el.focus();
+    }
+}
+
+function focusFirstIn(container) {
+    const target = container.querySelector('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex="0"]');
+    if (target) target.focus();
+    return !!target;
+}
+
+// ===== Shared field validation =====
+// One behaviour for every form (design-kit ux-patterns §3, §3.1):
+// - the message appears in the field's own reserved slot (.field-error), so
+//   nothing on the page moves;
+// - the message says how to fix it, built from the field's label
+//   ("Enter organization name", "Select governorate");
+// - the field is marked aria-invalid and linked to its message;
+// - the message clears as soon as the field is fixed;
+// - on submit, focus goes to the first invalid field (scrolled into view);
+//   long forms also show "N fields need attention" next to their submit button.
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function fieldLabelText(input) {
+    // A short label can be ambiguous in a message ("Enter email"), so a field
+    // may name itself for its messages: data-error-label="director email".
+    if (input.dataset && input.dataset.errorLabel) {
+        return input.dataset.errorLabel;
+    }
+    const label = input.id ? document.querySelector(`label[for="${input.id}"]`) : null;
+    const raw = label ? label.textContent : (input.getAttribute('aria-label') || '');
+    return raw.replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// "Organization Name" → "organization name", but keep acronyms ("NGO", "URL").
+function labelForSentence(text) {
+    return text.split(' ').map(w => (w.length > 1 && w === w.toUpperCase()) ? w : w.toLowerCase()).join(' ');
+}
+
+function requiredFieldMessage(input) {
+    const label = labelForSentence(fieldLabelText(input)) || 'this field';
+    if (input.tagName === 'SELECT') return `Select ${label}`;
+    if (input.type === 'checkbox') return `Confirm ${label}`;
+    if (input.type === 'date') return `Choose ${label}`;
+    return `Enter ${label}`;
+}
+
+function fieldErrorElement(input) {
+    return input.id ? document.getElementById(`${input.id}-error`) : null;
+}
+
+function setFieldError(input, message) {
+    input.classList.add('invalid');
+    input.setAttribute('aria-invalid', 'true');
+    const errorEl = fieldErrorElement(input);
+    if (errorEl) {
+        errorEl.textContent = message;
+        const described = (input.getAttribute('aria-describedby') || '').split(' ').filter(Boolean);
+        if (!described.includes(errorEl.id)) {
+            described.unshift(errorEl.id);
+            input.setAttribute('aria-describedby', described.join(' '));
+        }
+    }
+    enableLiveFieldClearing(input);
+}
+
+function clearFieldError(input) {
+    input.classList.remove('invalid');
+    input.removeAttribute('aria-invalid');
+    const errorEl = fieldErrorElement(input);
+    if (errorEl) errorEl.textContent = '';
+}
+
+function isFieldEmpty(input) {
+    if (input.type === 'checkbox') return !input.checked;
+    return !String(input.value || '').trim();
+}
+
+// What a field's error is right now ('' when it is fine).
+function fieldProblem(input) {
+    if (input.dataset.required === 'true' && isFieldEmpty(input)) {
+        return requiredFieldMessage(input);
+    }
+    if (input.type === 'email' && input.value.trim() && !EMAIL_FORMAT.test(input.value.trim())) {
+        return 'Enter a valid email address, like name@organization.org';
+    }
+    return '';
+}
+
+// Once a field has shown an error, re-check it as the user types and clear
+// the message the moment it is fixed (never add new errors while typing).
+function enableLiveFieldClearing(input) {
+    if (input.dataset.liveClear) return;
+    input.dataset.liveClear = 'true';
+    const recheck = () => {
+        if (input.classList.contains('invalid') && !fieldProblem(input)) {
+            clearFieldError(input);
+            updateFormErrorCount(input.closest('form'));
+        }
+    };
+    input.addEventListener('input', recheck);
+    input.addEventListener('change', recheck);
+}
+
+function focusFirstInvalid(inputs) {
+    const first = inputs[0];
+    if (!first) return;
+    first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    first.focus({ preventScroll: true });
+}
+
+// Validates every [data-required] field (plus email format) in the form,
+// shows the messages, moves focus to the first problem, and returns
+// whether the form is valid.
+function validateForm(form, { countNearSubmit = false } = {}) {
+    const fields = Array.from(form.querySelectorAll('input, select, textarea'))
+        .filter(el => !el.disabled && el.type !== 'hidden');
+    const invalid = [];
+    fields.forEach(input => {
+        const problem = fieldProblem(input);
+        if (problem) {
+            setFieldError(input, problem);
+            invalid.push(input);
+        } else {
+            clearFieldError(input);
+        }
+    });
+    if (countNearSubmit) {
+        form.dataset.errorCount = 'true';
+    }
+    updateFormErrorCount(form);
+    focusFirstInvalid(invalid);
+    return invalid.length === 0;
+}
+
+// "3 fields need attention" next to a long form's submit button. The slot
+// is created once and keeps its space, so showing it never moves anything.
+function updateFormErrorCount(form) {
+    if (!form || form.dataset.errorCount !== 'true') return;
+    const submit = form.id ? document.querySelector(`button[type="submit"][form="${form.id}"]`) || form.querySelector('button[type="submit"]') : form.querySelector('button[type="submit"]');
+    if (!submit) return;
+    let slot = submit.parentElement.querySelector('.form-error-count');
+    if (!slot) {
+        slot = document.createElement('span');
+        slot.className = 'form-error-count';
+        slot.setAttribute('role', 'status');
+        submit.parentElement.insertBefore(slot, submit.parentElement.firstChild);
+    }
+    const count = form.querySelectorAll('[aria-invalid="true"]').length;
+    slot.textContent = count === 0 ? '' : `${count} ${count === 1 ? 'field needs' : 'fields need'} attention`;
+}
+
 // ===== Reusable Form Modal =====
-function openFormModal(title, bodyHTML, footerHTML, wide) {
+// options.dismissOnBackdrop: false keeps the modal open when the user clicks
+// outside it, so it closes only from the X or its own buttons (used by the
+// registration wizard, where an accidental click would lose what was typed).
+function openFormModal(title, bodyHTML, footerHTML, wide, options = {}) {
     document.getElementById('formModalTitle').textContent = title;
     document.getElementById('formModalBody').innerHTML = bodyHTML;
     document.getElementById('formModalFooter').innerHTML = footerHTML;
     const overlay = document.getElementById('formModalOverlay');
     overlay.classList.toggle('modal-wide', !!wide);
+    overlay.dataset.dismissOnBackdrop = options.dismissOnBackdrop === false ? 'false' : 'true';
+    if (!overlay.classList.contains('show')) {
+        rememberFocusFor('formModalOverlay');
+    }
     overlay.style.display = 'flex';
     overlay.classList.add('show');
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
         window.lucide.createIcons();
     }
+    // Into the dialog: its first field, else its first action, else Close.
+    focusFirstIn(document.getElementById('formModalBody'))
+        || focusFirstIn(document.getElementById('formModalFooter'))
+        || document.getElementById('closeFormModal').focus();
 }
 
 function closeFormModal() {
@@ -17,6 +211,8 @@ function closeFormModal() {
     overlay.style.display = 'none';
     overlay.classList.remove('show');
     overlay.classList.remove('modal-wide');
+    delete overlay.dataset.dismissOnBackdrop;
+    restoreFocusFor('formModalOverlay');
 }
 
 // ===== Reusable Confirmation Dialog =====
@@ -39,6 +235,7 @@ function showConfirmDialog({ title, message, confirmLabel = 'Confirm', cancelLab
     icon.innerHTML = `<i data-lucide="${tone === 'danger' ? 'triangle-alert' : 'circle-help'}"></i>`;
 
     const overlay = document.getElementById('confirmDialogOverlay');
+    rememberFocusFor('confirmDialogOverlay');
     overlay.style.display = 'flex';
     overlay.classList.add('show');
 
@@ -47,6 +244,8 @@ function showConfirmDialog({ title, message, confirmLabel = 'Confirm', cancelLab
     }
 
     confirmDialogHandler = onConfirm;
+    // Cancel is the safe default, so Enter never confirms a destructive action by accident.
+    document.getElementById('confirmDialogCancelBtn').focus();
 }
 
 function closeConfirmDialog() {
@@ -54,6 +253,39 @@ function closeConfirmDialog() {
     overlay.style.display = 'none';
     overlay.classList.remove('show');
     confirmDialogHandler = null;
+    restoreFocusFor('confirmDialogOverlay');
+}
+
+// ===== Esc closes the topmost open layer =====
+// Order: confirm dialog, form modal, notification detail, notification panel,
+// account menu. A form modal opened with dismissOnBackdrop: false (the
+// registration wizard) also ignores Esc, so typed input isn't lost by accident.
+function handleEscapeKey(e) {
+    if (e.key !== 'Escape') return;
+    const isOpen = (id) => {
+        const el = document.getElementById(id);
+        return el && el.style.display !== 'none' && el.style.display !== '';
+    };
+
+    if (isOpen('confirmDialogOverlay')) {
+        closeConfirmDialog();
+    } else if (isOpen('formModalOverlay')) {
+        if (document.getElementById('formModalOverlay').dataset.dismissOnBackdrop === 'false') return;
+        closeFormModal();
+    } else if (isOpen('notificationDetailOverlay')) {
+        closeDetailModal();
+    } else if (isOpen('notificationModal')) {
+        closeNotificationModal();
+        document.getElementById('notificationBell').focus();
+    } else if (isOpen('accountDropdown')) {
+        const dropdown = document.getElementById('accountDropdown');
+        dropdown.classList.remove('show');
+        dropdown.style.display = 'none';
+        document.getElementById('accountBtn').focus();
+    } else {
+        return;
+    }
+    e.preventDefault();
 }
 
 // ===== Toast =====
@@ -195,226 +427,3 @@ function attachMultiSelectDropdown(id, onChange) {
         cb.addEventListener('change', updateDisplay);
     });
 }
-
-// ===== Organization profile: shared fields (used by the existing-NGO profile,
-// the new-NGO registration profile, and the admin read-only review page, so
-// all three always show the exact same organization fields) =====
-function renderOrgProfileFields(values, readOnly) {
-    const field = (id, label, value, required, type = 'text') => `
-        <div class="form-field">
-            <label for="${id}">${escapeHtml(label)}${required ? ' <span class="required">*</span>' : ''}</label>
-            <input type="${type}" id="${id}" value="${escapeHtml(value || '')}"${required && !readOnly ? ' data-required="true"' : ''}${readOnly ? ' disabled' : ''} />
-            <div class="field-error" id="${id}-error"></div>
-        </div>`;
-
-    return `
-        <section class="profile-section">
-            <h2 class="profile-section-title">General Information</h2>
-            <div class="logo-row">
-                <div class="logo-placeholder" aria-hidden="true">
-                    <i data-lucide="image"></i>
-                    <span>Logo</span>
-                </div>
-                ${readOnly ? '' : '<button type="button" class="btn btn-secondary" id="uploadLogoBtn">Upload Logo</button>'}
-            </div>
-            <div class="form-grid">
-                ${field('profile-name', 'Organization Name', values.name, true)}
-                ${field('profile-acronym', 'Acronym', values.acronym, false)}
-            </div>
-        </section>
-
-        <section class="profile-section">
-            <h2 class="profile-section-title">Contact Information</h2>
-            <div class="form-grid">
-                ${field('profile-phone', 'Institution Phone Number', values.phone, true)}
-                ${field('profile-mobile', 'Institution Mobile Number', values.mobile, false)}
-                ${field('profile-email', 'Institution Email', values.email, true, 'email')}
-                ${field('profile-director-name', 'Director Name', values.directorName, true)}
-                ${field('profile-director-email', 'Director Email', values.directorEmail, true, 'email')}
-                ${field('profile-director-mobile', 'Director Mobile Number', values.directorMobile, false)}
-            </div>
-        </section>
-
-        <section class="profile-section">
-            <h2 class="profile-section-title">Areas of Work</h2>
-            <div class="form-grid">
-                ${field('profile-sectors', 'Sectors / Areas of Responsibility', values.sectors, false)}
-            </div>
-        </section>
-
-        <section class="profile-section">
-            <h2 class="profile-section-title">Online Presence</h2>
-            <div class="form-grid">
-                ${field('profile-website', 'Organization Website', values.website, false, 'url')}
-                ${field('profile-linkedin', 'LinkedIn Profile', values.linkedin, false, 'url')}
-                ${field('profile-daleel', 'Daleel Madani Link', values.daleelMadani, false, 'url')}
-            </div>
-        </section>`;
-}
-
-function collectOrgProfileFields(form) {
-    return {
-        name: form.querySelector('#profile-name').value.trim(),
-        acronym: form.querySelector('#profile-acronym').value.trim(),
-        phone: form.querySelector('#profile-phone').value.trim(),
-        mobile: form.querySelector('#profile-mobile').value.trim(),
-        email: form.querySelector('#profile-email').value.trim(),
-        directorName: form.querySelector('#profile-director-name').value.trim(),
-        directorEmail: form.querySelector('#profile-director-email').value.trim(),
-        directorMobile: form.querySelector('#profile-director-mobile').value.trim(),
-        sectors: form.querySelector('#profile-sectors').value.trim(),
-        website: form.querySelector('#profile-website').value.trim(),
-        linkedin: form.querySelector('#profile-linkedin').value.trim(),
-        daleelMadani: form.querySelector('#profile-daleel').value.trim()
-    };
-}
-
-// ===== Organization profile: focal persons grid (shared across every
-// profile page) — an addable/editable list of contacts, each tagged with the
-// reporting platform (4Ws, Substance Use) they're the focal point for. =====
-const FOCAL_PLATFORMS = [
-    { value: '4Ws', description: 'The 4Ws platform (Who, What, Where, When) tracks the mental health and psychosocial support activities your organization delivers, for national activity mapping.' },
-    { value: 'Substance Use', description: 'The Substance Use platform collects data on your organization\'s substance use prevention, treatment, and harm-reduction activities for national reporting.' }
-];
-
-function focalPlatformDescription(platform) {
-    const match = FOCAL_PLATFORMS.find(p => p.value === platform);
-    return match ? match.description : '';
-}
-
-function renderFocalPersonsSection(focalPersons, readOnly) {
-    const rowsHTML = focalPersons.length
-        ? focalPersons.map((f, index) => `
-            <tr>
-                <td>${escapeHtml(f.area)}</td>
-                <td>${escapeHtml(f.name || '-')}</td>
-                <td>${escapeHtml(f.email || '-')}</td>
-                <td>${escapeHtml(f.mobile || '-')}</td>
-                ${readOnly ? '' : `<td class="actions-col">
-                    <button type="button" class="icon-action" title="Edit" aria-label="Edit focal person" data-focal-action="edit" data-focal-index="${index}"><i data-lucide="pencil"></i></button>
-                    <button type="button" class="icon-action danger" title="Remove" aria-label="Remove focal person" data-focal-action="remove" data-focal-index="${index}"><i data-lucide="trash-2"></i></button>
-                </td>`}
-            </tr>`).join('')
-        : `<tr><td colspan="${readOnly ? 4 : 5}" class="empty-cell">No focal persons added yet.</td></tr>`;
-
-    return `
-        <section class="profile-section" id="focalPersonsSection">
-            <div class="profile-section-header">
-                <h2 class="profile-section-title">Organization Focal Persons</h2>
-                ${readOnly ? '' : `<button type="button" class="btn btn-secondary" id="addFocalPersonBtn"><i data-lucide="plus"></i><span>Add Focal Person</span></button>`}
-            </div>
-            ${readOnly ? '' : '<p class="status-text">Add a contact for each reporting platform, such as 4Ws or Substance Use. Contact details aren\'t required right away — you can fill them in later.</p>'}
-            <table class="data-table">
-                <thead>
-                    <tr><th>Platform</th><th>Name</th><th>Email</th><th>Mobile</th>${readOnly ? '' : '<th class="actions-col">Actions</th>'}</tr>
-                </thead>
-                <tbody>${rowsHTML}</tbody>
-            </table>
-        </section>`;
-}
-
-// `focalPersons` must be the live array (mutated in place) backing whichever
-// profile is on screen; `onChange` fires after every add/edit/remove so the
-// caller can persist the change and mark the page dirty.
-function attachFocalPersonsSection(focalPersons, readOnly, onChange) {
-    if (readOnly) {
-        return;
-    }
-
-    const rerender = () => {
-        document.getElementById('focalPersonsSection').outerHTML = renderFocalPersonsSection(focalPersons, false);
-        attachFocalPersonsSection(focalPersons, false, onChange);
-        refreshLucideIcons();
-    };
-
-    document.getElementById('addFocalPersonBtn').addEventListener('click', () => {
-        openFocalPersonModal(null, (entry) => {
-            focalPersons.push(entry);
-            rerender();
-            if (onChange) onChange();
-        });
-    });
-
-    document.querySelectorAll('#focalPersonsSection [data-focal-action]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const index = Number(btn.getAttribute('data-focal-index'));
-            const action = btn.getAttribute('data-focal-action');
-            if (action === 'edit') {
-                openFocalPersonModal(focalPersons[index], (entry) => {
-                    focalPersons[index] = entry;
-                    rerender();
-                    if (onChange) onChange();
-                });
-            } else if (action === 'remove') {
-                const f = focalPersons[index];
-                showConfirmDialog({
-                    title: 'Remove Focal Person',
-                    message: `Remove the ${f.area} focal person${f.name ? ` "${f.name}"` : ''}?`,
-                    confirmLabel: 'Remove',
-                    tone: 'danger',
-                    onConfirm: () => {
-                        focalPersons.splice(index, 1);
-                        rerender();
-                        if (onChange) onChange();
-                    }
-                });
-            }
-        });
-    });
-}
-
-function openFocalPersonModal(existing, onSave) {
-    const editing = !!existing;
-    const f = existing || { area: '', name: '', email: '', mobile: '' };
-    const platformOpts = FOCAL_PLATFORMS.map(p => `<option value="${escapeHtml(p.value)}"${p.value === f.area ? ' selected' : ''}>${escapeHtml(p.value)}</option>`).join('');
-
-    openFormModal(editing ? 'Edit Focal Person' : 'Add Focal Person', `
-        <form id="focalPersonForm" class="modal-form" novalidate>
-            <div class="form-field">
-                <label for="focal-platform">Platform <span class="required">*</span></label>
-                <select id="focal-platform" data-required="true">
-                    <option value="">Select platform</option>
-                    ${platformOpts}
-                </select>
-                <div class="field-error" id="focal-platform-error"></div>
-                <p class="field-hint" id="focal-platform-hint">${escapeHtml(focalPlatformDescription(f.area))}</p>
-            </div>
-            <div class="form-field">
-                <label for="focal-name">Name</label>
-                <input type="text" id="focal-name" value="${escapeHtml(f.name || '')}" />
-            </div>
-            <div class="form-field">
-                <label for="focal-email">Email</label>
-                <input type="email" id="focal-email" value="${escapeHtml(f.email || '')}" />
-                <div class="field-error" id="focal-email-error"></div>
-            </div>
-            <div class="form-field">
-                <label for="focal-mobile">Mobile</label>
-                <input type="text" id="focal-mobile" value="${escapeHtml(f.mobile || '')}" />
-            </div>
-        </form>`,
-        `<button type="button" class="modal-btn" id="focalCancelBtn">Cancel</button>
-         <button type="button" class="modal-btn primary" id="focalSaveBtn">${editing ? 'Save Changes' : 'Add Focal Person'}</button>`);
-
-    document.getElementById('focal-platform').addEventListener('change', (e) => {
-        document.getElementById('focal-platform-hint').textContent = focalPlatformDescription(e.target.value);
-    });
-
-    document.getElementById('focalCancelBtn').addEventListener('click', closeFormModal);
-    document.getElementById('focalSaveBtn').addEventListener('click', () => {
-        const form = document.getElementById('focalPersonForm');
-        if (!validateModalForm(form)) {
-            return;
-        }
-        const entry = {
-            area: form.querySelector('#focal-platform').value,
-            name: form.querySelector('#focal-name').value.trim(),
-            email: form.querySelector('#focal-email').value.trim(),
-            mobile: form.querySelector('#focal-mobile').value.trim()
-        };
-        closeFormModal();
-        onSave(entry);
-        showToast(editing ? 'Focal person updated.' : 'Focal person added.', 'success');
-    });
-}
-

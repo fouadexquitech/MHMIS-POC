@@ -1,39 +1,47 @@
-// ===== Organization Profile =====
-function renderOrganizationProfilePage() {
-    const p = mockData.organizationProfile;
+// ===== Organization Profile (approved NGO) =====
+// One page with four tabs. Organization Details is a form saved with Save
+// Changes; focal persons, facilities and providers are lists whose records
+// are saved one at a time. The same tabs are used during registration and by
+// the administrator (org-profile.js).
+let organizationProfileView = { tab: 'details' };
 
+// An organization that is not eligible for Substance Use has no Substance
+// Use focal persons to manage.
+function getOwnFocalPersonAreas() {
+    return isSubstanceUseEligible() ? ['4Ws', 'Substance Use'] : ['4Ws'];
+}
+
+function renderOrganizationProfilePage() {
+    const tab = organizationProfileView.tab;
     return `
         <div class="page">
             <div class="page-header">
                 <h1 class="page-title">Organization Profile</h1>
             </div>
-
-            <form id="profileForm" class="profile-form" novalidate>
-                ${renderOrgProfileFields(p, false)}
-            </form>
-
-            ${renderFocalPersonsSection(mockData.focalPersons, false)}
-
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" id="profileCancelBtn">Cancel</button>
-                <button type="submit" form="profileForm" class="btn btn-primary">Save Changes</button>
-            </div>
+            ${renderProfileTabs(getOrgProfileTabs(), tab)}
+            ${renderProfilePanel('details', tab, `
+                <form id="profileForm" class="profile-form" novalidate>
+                    ${renderOrgDetailsForm(getCurrentNgoProfile())}
+                </form>
+                <div class="form-actions form-actions-sticky">
+                    <button type="button" class="btn btn-secondary" id="profileCancelBtn">Cancel</button>
+                    <button type="submit" form="profileForm" class="btn btn-primary">Save Changes</button>
+                </div>`)}
+            ${renderProfilePanel('focal-persons', tab, renderFocalPersonsTab(mockData.focalPersons, { areas: getOwnFocalPersonAreas() }))}
+            ${renderProfilePanel('facilities', tab, renderFacilitiesList())}
+            ${renderProfilePanel('providers', tab, renderProvidersList())}
         </div>`;
 }
 
 function attachOrganizationProfileListeners() {
+    attachProfileTabs(id => { organizationProfileView.tab = id; });
+
     const form = document.getElementById('profileForm');
-    form.querySelectorAll('input').forEach(input => {
-        input.addEventListener('input', () => { appState.profileDirty = true; });
-    });
+    attachOrgDetailsForm(form, () => { appState.profileDirty = true; });
 
     document.getElementById('profileCancelBtn').addEventListener('click', () => {
         appState.profileDirty = false;
         renderPage('organization-profile');
-    });
-
-    document.getElementById('uploadLogoBtn').addEventListener('click', () => {
-        showToast('Logo upload is simulated in this POC.', 'info');
     });
 
     form.addEventListener('submit', (e) => {
@@ -41,33 +49,19 @@ function attachOrganizationProfileListeners() {
         if (!validateProfileForm(form)) {
             return;
         }
-        Object.assign(mockData.organizationProfile, collectOrgProfileFields(form));
+        Object.assign(getCurrentNgoProfile(), collectOrgDetails(form));
         appState.profileDirty = false;
-        showToast('Organization profile saved successfully.', 'success');
+        updateTopBarIdentity();
+        showToast('Organization Details saved.', 'success');
     });
 
-    attachFocalPersonsSection(mockData.focalPersons, false, () => {
-        appState.profileDirty = true;
-    });
+    attachFocalPersonsTab(mockData.focalPersons, { areas: getOwnFocalPersonAreas() });
+    attachFacilitiesListeners();
+    attachProvidersListeners();
 }
 
+// Long page form: shared validation (shared-ui.js) plus the
+// "N fields need attention" line next to the submit button.
 function validateProfileForm(form) {
-    let valid = true;
-    form.querySelectorAll('.field-error').forEach(el => (el.textContent = ''));
-    form.querySelectorAll('input').forEach(el => el.classList.remove('invalid'));
-
-    form.querySelectorAll('input[data-required="true"]').forEach(input => {
-        const errorEl = document.getElementById(`${input.id}-error`);
-        if (!input.value.trim()) {
-            input.classList.add('invalid');
-            if (errorEl) errorEl.textContent = 'This field is required.';
-            valid = false;
-        } else if (input.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value.trim())) {
-            input.classList.add('invalid');
-            if (errorEl) errorEl.textContent = 'Enter a valid email address.';
-            valid = false;
-        }
-    });
-    return valid;
+    return validateForm(form, { countNearSubmit: true });
 }
-
