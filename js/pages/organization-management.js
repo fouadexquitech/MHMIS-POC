@@ -3,10 +3,22 @@
 // has entered: its profile, its facilities and its providers. This is where
 // NMHP checks an organization's data; registration review and account access
 // stay on their own pages.
+//
+// The list also shows when each organization was approved and flags one that
+// has added no facility, activity or survey since then ("Not started"),
+// so NMHP knows whom to follow up with. The POC reads a mock flag; the real
+// application works it out from the organization's records.
 let organizationManagementView = {
     search: '',
+    // '' (all), SINCE_APPROVAL.started or SINCE_APPROVAL.notStarted
+    startedFilter: '',
     selectedId: null,
     tab: 'details'
+};
+
+const SINCE_APPROVAL = {
+    started: 'Started',
+    notStarted: 'Not Started'
 };
 
 function getManagedOrganizations() {
@@ -18,6 +30,8 @@ function getManagedOrganizations() {
         name: p.name,
         acronym: p.acronym,
         email: p.email,
+        approvedDate: mockData.organizationApproval.approvedDate,
+        contributedSinceApproval: mockData.organizationApproval.contributedSinceApproval,
         accountAccess: userManagementView.existingNgoAccess,
         profile: p,
         focalPersons: mockData.focalPersons,
@@ -33,6 +47,8 @@ function getManagedOrganizations() {
                 name: r.organization,
                 acronym: r.acronym,
                 email: r.email,
+                approvedDate: r.reviewedDate,
+                contributedSinceApproval: !!r.contributedSinceApproval,
                 accountAccess: r.accountAccess,
                 profile: getRegistrationProfileValues(r),
                 focalPersons: r.focalPersons || [],
@@ -50,10 +66,21 @@ function getManagedOrganizationById(id) {
 
 function getFilteredManagedOrganizations() {
     const query = organizationManagementView.search.trim().toLowerCase();
-    return getManagedOrganizations().filter(o => !query
-        || o.name.toLowerCase().includes(query)
-        || (o.acronym || '').toLowerCase().includes(query)
-        || (o.email || '').toLowerCase().includes(query));
+    const started = organizationManagementView.startedFilter;
+    return getManagedOrganizations()
+        .filter(o => !query
+            || o.name.toLowerCase().includes(query)
+            || (o.acronym || '').toLowerCase().includes(query)
+            || (o.email || '').toLowerCase().includes(query))
+        .filter(o => !started || o.contributedSinceApproval === (started === SINCE_APPROVAL.started))
+        // Most recent approvals first.
+        .sort((a, b) => (parseDemoDate(b.approvedDate) || 0) - (parseDemoDate(a.approvedDate) || 0));
+}
+
+// Shown under the approval date of an organization that has added no
+// facility, activity or survey since NMHP approved it.
+function renderNotStartedFlag() {
+    return '<div class="cell-flag" title="No facility, activity or survey added since approval"><i data-lucide="hourglass"></i><span>Not&nbsp;started</span></div>';
 }
 
 // ---------- Organization list ----------
@@ -67,6 +94,10 @@ function renderOrganizationManagementPage() {
                     <div class="cell-secondary">${escapeHtml(o.acronym || '')}</div>
                 </td>
                 <td>${escapeHtml(o.email || '-')}</td>
+                <td>
+                    <div>${escapeHtml(o.approvedDate || '-')}</div>
+                    ${o.contributedSinceApproval ? '' : renderNotStartedFlag()}
+                </td>
                 <td>${o.facilities.length}</td>
                 <td>${o.providers.length}</td>
                 <td>${renderAccountAccessPill(o.accountAccess)}</td>
@@ -74,14 +105,14 @@ function renderOrganizationManagementPage() {
                     <button type="button" class="icon-action" title="View Organization" aria-label="View ${escapeHtml(o.name)}" data-view-organization="${o.id}"><i data-lucide="eye"></i></button>
                 </td>
             </tr>`).join('')
-        : '<tr><td colspan="6" class="empty-cell">No organizations match the current search.</td></tr>';
+        : '<tr><td colspan="7" class="empty-cell">No organizations match the current filters.</td></tr>';
 
     return `
         <div class="page">
             <div class="page-header">
                 <div>
                     <h1 class="page-title">Organization Management</h1>
-                    <p class="page-lead">Open an approved organization to check its details, focal persons, facilities, and providers.</p>
+                    <p class="page-lead">Open an approved organization to check its details, focal persons, facilities, and providers. Not started means it has added no facility, activity or survey since approval.</p>
                 </div>
             </div>
             <div class="list-toolbar">
@@ -89,6 +120,7 @@ function renderOrganizationManagementPage() {
                     <i data-lucide="search"></i>
                     <input type="search" id="organizationManagementSearch" placeholder="Search organizations by name or email..." aria-label="Search organizations" value="${escapeHtml(organizationManagementView.search)}" />
                 </div>
+                ${renderSelect('organizationStartedFilter', 'Since Approval', [SINCE_APPROVAL.started, SINCE_APPROVAL.notStarted], organizationManagementView.startedFilter)}
             </div>
             <div class="result-count">${records.length} organization${records.length === 1 ? '' : 's'}</div>
             <table class="data-table">
@@ -96,6 +128,7 @@ function renderOrganizationManagementPage() {
                     <tr>
                         <th>Organization</th>
                         <th>Email</th>
+                        <th>Approved</th>
                         <th>Facilities</th>
                         <th>Providers</th>
                         <th>Account Access</th>
@@ -112,6 +145,11 @@ function attachOrganizationManagementListeners() {
         organizationManagementView.search = e.target.value;
         renderPage('organization-management');
         document.getElementById('organizationManagementSearch').focus();
+    });
+
+    document.getElementById('organizationStartedFilter').addEventListener('change', (e) => {
+        organizationManagementView.startedFilter = e.target.value;
+        renderPage('organization-management');
     });
 
     document.querySelectorAll('[data-view-organization]').forEach(btn => {
@@ -172,6 +210,9 @@ function renderOrganizationDetailPage() {
                 <h1 class="page-title">${escapeHtml(org.name)}</h1>
                 ${renderAccountAccessPill(org.accountAccess)}
             </div>
+            <p class="status-text">Approved on ${escapeHtml(org.approvedDate || '-')}${org.contributedSinceApproval
+                ? '.'
+                : ' &middot; Not started: no facility, activity or survey added since approval.'}</p>
 
             ${renderProfileTabs(tabs, tab)}
             ${renderProfilePanel('details', tab, renderOrgDetailsReadOnly(org.profile))}

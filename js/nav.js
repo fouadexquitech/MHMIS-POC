@@ -4,8 +4,9 @@
 //   - MHIS: Home, Events Calendar, Organization Profile, the Reporting
 //     Platforms entries, Resources & Help and Contact Us;
 //   - one area per reporting platform (4Ws, Substance Use): Overview, the
-//     platform's work pages, its Dashboard, Resources & Help and Contact Us,
-//     with a Back to MHIS button at the bottom.
+//     platform's work page (Activities or Surveys), My Dashboard, Advanced
+//     Dashboard, Resources & Help and Contact Us, with a Back to MHIS button
+//     at the bottom.
 // A platform is entered from its MHIS Home card or from the Reporting
 // Platforms group, always in the same browser tab. The administrator and an
 // NGO that is not approved yet have a single sidebar.
@@ -18,7 +19,7 @@ const REPORTING_PLATFORMS = {
         tagline: 'Who does What, Where and When',
         icon: 'clipboard-list',
         overviewPage: '4ws-overview',
-        pages: ['4ws-overview', 'activities', 'my-dashboard'],
+        pages: ['4ws-overview', 'activities', 'my-dashboard', 'advanced-dashboard'],
         aboutTopic: 'about-4ws'
     },
     'su': {
@@ -28,7 +29,7 @@ const REPORTING_PLATFORMS = {
         tagline: 'Yearly prevention and treatment surveys',
         icon: 'file-text',
         overviewPage: 'su-overview',
-        pages: ['su-overview', 'surveys', 'su-dashboard'],
+        pages: ['su-overview', 'surveys', 'su-dashboard', 'su-advanced-dashboard'],
         aboutTopic: 'about-su'
     }
 };
@@ -39,10 +40,12 @@ const NAV_DEFINITIONS = {
     'organization-profile': { label: 'Organization Profile', icon: 'building-2' },
     '4ws-overview': { label: 'Overview', icon: 'layout-grid' },
     'activities': { label: 'Activities', icon: 'list-checks' },
-    'my-dashboard': { label: 'Dashboard', icon: 'layout-dashboard' },
+    'my-dashboard': { label: 'My Dashboard', icon: 'layout-dashboard' },
+    'advanced-dashboard': { label: 'Advanced Dashboard', icon: 'chart-column' },
     'su-overview': { label: 'Overview', icon: 'layout-grid' },
     'surveys': { label: 'Surveys', icon: 'files' },
-    'su-dashboard': { label: 'Dashboard', icon: 'layout-dashboard' },
+    'su-dashboard': { label: 'My Dashboard', icon: 'layout-dashboard' },
+    'su-advanced-dashboard': { label: 'Advanced Dashboard', icon: 'chart-column' },
     'resources-help': { label: 'Resources & Help', icon: 'circle-help' },
     'contact-us': { label: 'Contact Us', icon: 'mail' },
     'organization-registrations': { label: 'Submitted Profiles', icon: 'file-check' },

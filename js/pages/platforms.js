@@ -87,8 +87,8 @@ function renderFourWsOverviewPage() {
         lead: 'Report the activities your organization implements and follow them in your dashboard.',
         actions: [
             { id: 'add-activity', icon: 'plus', label: 'Add Activity', primary: true },
-            { id: 'activities', icon: 'list-checks', label: 'View Activities' },
-            { id: 'my-dashboard', icon: 'layout-dashboard', label: 'Open Dashboard' }
+            { id: 'activities', icon: 'list-checks', label: 'My Activities' },
+            { id: 'my-dashboard', icon: 'layout-dashboard', label: 'Go to My Dashboard' }
         ],
         glanceHTML: renderFourWsProgress()
     });
@@ -99,8 +99,8 @@ function renderSubstanceUseOverviewPage() {
         lead: 'Fill and submit your organization’s yearly substance use surveys.',
         actions: [
             { id: 'add-survey', icon: 'plus', label: 'Add Survey', primary: true },
-            { id: 'surveys', icon: 'files', label: 'View Surveys' },
-            { id: 'su-dashboard', icon: 'layout-dashboard', label: 'Open Dashboard' }
+            { id: 'surveys', icon: 'files', label: 'My Surveys' },
+            { id: 'su-dashboard', icon: 'layout-dashboard', label: 'Go to My Dashboard' }
         ],
         glanceHTML: renderSubstanceUseProgress()
     });

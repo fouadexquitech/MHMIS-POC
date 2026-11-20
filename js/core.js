@@ -278,6 +278,14 @@ function renderPageBody(page) {
             container.innerHTML = renderSubstanceUseDashboardPage();
             attachMyDashboardListeners();
             break;
+        case 'advanced-dashboard':
+            container.innerHTML = renderAdvancedDashboardPage('4ws');
+            attachAdvancedDashboardListeners('4ws');
+            break;
+        case 'su-advanced-dashboard':
+            container.innerHTML = renderAdvancedDashboardPage('su');
+            attachAdvancedDashboardListeners('su');
+            break;
         case 'events-calendar':
             container.innerHTML = renderEventsCalendarPage();
             attachEventsCalendarListeners();

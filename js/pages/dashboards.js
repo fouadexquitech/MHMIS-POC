@@ -1,5 +1,10 @@
 // ===== Dashboards =====
-const ADVANCED_DASHBOARD_URL = 'https://mhmiswebsite-dev.azurewebsites.net/#/extrapages/advanced-dashboard';
+// Each platform's Advanced Dashboard is an external Power BI report. NMHP has
+// not shared the Substance Use report link yet, so the POC cannot open it.
+const ADVANCED_DASHBOARD_URLS = {
+    '4ws': 'https://mhmiswebsite-dev.azurewebsites.net/#/extrapages/advanced-dashboard',
+    'su': ''
+};
 
 // Sample 4Ws dashboard content, represented as tabs like the existing dashboard.
 // Reports are shown as-is (not redesigned) — this is a representative POC snapshot.
@@ -142,8 +147,7 @@ function renderMyDashboardPage() {
         title: '4Ws Dashboard',
         tabs: dashboardTabs,
         lead: 'A snapshot of your logged 4Ws data across activities, beneficiaries, facilities, and funding.',
-        note: 'These reports summarise the data your organization has published. Move between tabs to explore each area.',
-        advancedDashboard: true
+        note: 'These reports summarise the data your organization has published. Move between tabs to explore each area.'
     });
 }
 
@@ -152,12 +156,11 @@ function renderSubstanceUseDashboardPage() {
         title: 'Substance Use Dashboard',
         tabs: substanceUseDashboardTabs,
         lead: 'A snapshot of your Substance Use surveys by type and reporting year.',
-        note: 'Sample content only. The Substance Use dashboard reports are not final in this prototype.',
-        advancedDashboard: false
+        note: 'Sample content only. The Substance Use dashboard reports are not final in this prototype.'
     });
 }
 
-function renderDashboardTabsPage({ title, tabs, lead, note, advancedDashboard }) {
+function renderDashboardTabsPage({ title, tabs, lead, note }) {
     const tabsHTML = tabs.map((tab, index) => `
         <button class="tab ${index === 0 ? 'active' : ''}" data-dashboard-tab="${tab.id}">
             <i data-lucide="${tab.icon}"></i>
@@ -198,9 +201,6 @@ function renderDashboardTabsPage({ title, tabs, lead, note, advancedDashboard })
                     <h1 class="page-title">${escapeHtml(title)}</h1>
                     <p class="page-lead">${escapeHtml(lead)}</p>
                 </div>
-                ${advancedDashboard ? `<button class="btn btn-secondary" id="openAdvancedDashboardBtn" title="Opens the Power BI report in a new browser tab">
-                    <i data-lucide="external-link"></i><span>Advanced Dashboard</span>
-                </button>` : ''}
             </div>
             <div class="dashboard-note">
                 <i data-lucide="info"></i>
@@ -222,13 +222,44 @@ function attachMyDashboardListeners() {
             });
         });
     });
-
-    document.getElementById('openAdvancedDashboardBtn')?.addEventListener('click', openAdvancedDashboard);
 }
 
-// The Advanced Dashboard is an external Power BI report, opened in a new
-// browser tab from the 4Ws Dashboard page.
-function openAdvancedDashboard() {
-    window.open(ADVANCED_DASHBOARD_URL, '_blank', 'noopener');
+// ===== Advanced Dashboard =====
+// The Advanced Dashboard item of each platform opens this page first. It says
+// that the Power BI report opens in a new browser tab, so the user does not
+// leave MHIS without notice, and offers the button that opens it.
+function renderAdvancedDashboardPage(platformKey) {
+    const url = ADVANCED_DASHBOARD_URLS[platformKey];
+    return `
+        <div class="page">
+            <div class="page-header">
+                <h1 class="page-title">Advanced Dashboard</h1>
+            </div>
+            <div class="external-dashboard-card">
+                <div class="external-dashboard-icon">
+                    <i data-lucide="external-link"></i>
+                </div>
+                <h2 class="external-dashboard-title">Opens in a new browser tab</h2>
+                <p class="external-dashboard-text">
+                    The Advanced Dashboard is powered by an external Power BI report. Selecting the button below
+                    opens it in a separate browser tab so you keep this workspace open.
+                </p>
+                ${url ? `<p class="external-dashboard-url">${escapeHtml(url)}</p>` : ''}
+                <button type="button" class="btn btn-primary" id="launchAdvancedDashboardBtn">
+                    <i data-lucide="external-link"></i><span>Open Advanced Dashboard</span>
+                </button>
+            </div>
+        </div>`;
+}
+
+function attachAdvancedDashboardListeners(platformKey) {
+    document.getElementById('launchAdvancedDashboardBtn')?.addEventListener('click', () => {
+        const url = ADVANCED_DASHBOARD_URLS[platformKey];
+        if (!url) {
+            showToast('The Substance Use Power BI report is not linked in this prototype yet.', 'info');
+            return;
+        }
+        window.open(url, '_blank', 'noopener');
+    });
 }
 

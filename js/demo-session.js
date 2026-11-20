@@ -8,7 +8,7 @@ const DEMO_STORAGE_KEY = 'mhis-demo-state';
 // Raise this whenever createRegistrationSeed() changes, so a browser that ran
 // an earlier version of the POC picks up the new sample registrations instead
 // of the ones it saved before (no manual "Reset demo data" needed).
-const DEMO_SEED_VERSION = 3;
+const DEMO_SEED_VERSION = 4;
 
 // Fully simulated — the POC has no backend, so a fixed code stands in for a
 // real emailed verification code during the registration wizard.
@@ -90,6 +90,9 @@ const DEMO_ACCOUNTS = [
 // Each registration carries the full organization profile: Organization
 // Details, focal persons, facilities and providers. Only Organization Details
 // is required to submit; the other tabs can be filled now or after approval.
+// An approved registration's reviewedDate is its approval date, and
+// contributedSinceApproval says whether the organization has added any
+// facility, activity or survey since then (Organization Management).
 function createRegistrationSeed() {
     return [
         {
@@ -245,6 +248,7 @@ function createRegistrationSeed() {
             submittedDate: '11 Dec 2024',
             reviewMessage: '',
             reviewedDate: '16 Dec 2024',
+            contributedSinceApproval: false,
             previousRequest: null,
             accountAccess: ACCOUNT_ACCESS.active,
             role: 'Organization Admin'
@@ -279,6 +283,7 @@ function createRegistrationSeed() {
             submittedDate: '02 Oct 2024',
             reviewMessage: '',
             reviewedDate: '07 Oct 2024',
+            contributedSinceApproval: true,
             previousRequest: null,
             accountAccess: ACCOUNT_ACCESS.inactive,
             role: 'Organization Admin'
@@ -419,9 +424,17 @@ function countRegistrationsByStatus(status) {
     return demoState.registrations.filter(r => r.status === status).length;
 }
 
+const DEMO_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 function formatDemoDate(date) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}`;
+    return `${String(date.getDate()).padStart(2, '0')} ${DEMO_MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+// Reads a date written by formatDemoDate ("07 Oct 2024"), or returns null.
+function parseDemoDate(text) {
+    const match = /^(\d{1,2}) ([A-Z][a-z]{2}) (\d{4})$/.exec((text || '').trim());
+    const month = match ? DEMO_MONTHS.indexOf(match[2]) : -1;
+    return month === -1 ? null : new Date(Number(match[3]), month, Number(match[1]));
 }
 
 function submitRegistrationForReview(id) {

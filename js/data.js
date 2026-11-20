@@ -378,6 +378,13 @@ mockData.fourWsOnlyProfile = {
     daleelMadani: ""
 };
 
+// When NMHP approved the Existing NGO, and whether it has added any facility,
+// activity or survey since then (shown in Organization Management).
+mockData.organizationApproval = {
+    approvedDate: "14 Mar 2023",
+    contributedSinceApproval: true
+};
+
 // Sectors / areas of responsibility (AORs) an organization can take part
 // in, as listed in the Organization Details of the current MHIS.
 mockData.aorSectors = [
